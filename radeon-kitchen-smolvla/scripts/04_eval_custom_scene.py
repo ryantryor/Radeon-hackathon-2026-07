@@ -29,6 +29,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from vision_utils import ablate_camera, augment_image, resolve_domain_randomization
+
 
 # ---------------------------------------------------------------------------
 # Ensure sibling modules are importable
@@ -115,6 +117,15 @@ def main():
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--dataset-id", default="local/kitchen-pick")
     ap.add_argument("--task", default="Pick up the red cube.")
+    ap.add_argument("--domain-randomization", action="store_true",
+                    help="Enable default brightness and sensor-noise perturbations")
+    ap.add_argument("--image-noise-std", type=float, default=0.0)
+    ap.add_argument("--brightness-range", type=float, nargs=2, default=None,
+                    metavar=("MIN", "MAX"))
+    ap.add_argument("--camera-ablation", default="both",
+                    choices=["both", "overhead_only", "wrist_only"],
+                    help="Mask one visual input while keeping the policy schema unchanged")
+    ap.add_argument("--camera-ablation-fill", type=float, default=127.5)
 
     # Eval args
     ap.add_argument("--n-episodes", type=int, default=10)
@@ -135,6 +146,8 @@ def main():
     ap.add_argument("--run-name", default="kitchen_eval",
                     help="Subfolder under output-dir/eval/ for this run")
     ap.add_argument("--record-video", action="store_true")
+    ap.add_argument("--episode-manifest", type=Path, default=None,
+                    help="JSON manifest with fixed robot-local cube placements")
     ap.add_argument(
         "--render-cpu",
         action="store_true",
@@ -158,6 +171,11 @@ def main():
     add_pick_args(ap)
     ap.set_defaults(anchor="floor_origin")
     args = ap.parse_args()
+    args.image_noise_std, args.brightness_range = resolve_domain_randomization(
+        args.domain_randomization,
+        args.image_noise_std,
+        tuple(args.brightness_range) if args.brightness_range else None,
+    )
 
     n_dofs = len(JOINT_NAMES)
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
@@ -426,9 +444,27 @@ def main():
     # ------------------------------------------------------------------
     rng = random.Random(args.seed)
     episode_inits = []
+    manifest_coords = None
+    if args.episode_manifest is not None:
+        manifest = json.loads(args.episode_manifest.read_text(encoding="utf-8"))
+        manifest_coords = manifest.get("coordinates", manifest)
+        if not isinstance(manifest_coords, list) or len(manifest_coords) < args.n_episodes:
+            raise ValueError(
+                f"episode manifest must contain at least {args.n_episodes} coordinates"
+            )
+        print(f"[eval] fixed episode manifest: {args.episode_manifest}")
     for ep in range(args.n_episodes):
-        dx = rng.uniform(*CUBE_RANGE_X)
-        dy = rng.uniform(*CUBE_RANGE_Y)
+        if manifest_coords is None:
+            dx = rng.uniform(*CUBE_RANGE_X)
+            dy = rng.uniform(*CUBE_RANGE_Y)
+        else:
+            item = manifest_coords[ep]
+            values = item.get("cube_local_dxdy") if isinstance(item, dict) else item
+            if values is None and isinstance(item, dict):
+                values = item.get("cube_xy")
+            if not isinstance(values, (list, tuple)) or len(values) != 2:
+                raise ValueError(f"invalid manifest coordinate at index {ep}: {item!r}")
+            dx, dy = float(values[0]), float(values[1])
         world_pos = to_world(base_xy, yaw_rad, surface_z, (dx, dy, cube_half_z))
         episode_inits.append((dx, dy, world_pos))
 
@@ -458,6 +494,11 @@ def main():
             prev_states.clear()
         action_queue = []
         replan_count = 0
+        image_rng = np.random.default_rng(args.seed + 100_000 + ep_idx)
+        brightness = (
+            float(image_rng.uniform(*args.brightness_range))
+            if args.brightness_range is not None else 1.0
+        )
 
         for step in range(args.max_steps):
             state = to_numpy(franka.get_dofs_position(motors_dof)).astype(np.float32)
@@ -471,9 +512,21 @@ def main():
             if len(action_queue) == 0:
                 images = None
                 if _needs_images:
+                    frame_up = ablate_camera(
+                        augment_image(render_cam(cam_up), image_rng,
+                                      args.image_noise_std, brightness),
+                        "overhead", args.camera_ablation,
+                        args.camera_ablation_fill,
+                    )
+                    frame_side = ablate_camera(
+                        augment_image(render_cam(cam_side), image_rng,
+                                      args.image_noise_std, brightness),
+                        "wrist" if args.camera_layout == "up_wrist" else "side",
+                        args.camera_ablation, args.camera_ablation_fill,
+                    )
                     images = {
-                        "observation.images.up": render_cam(cam_up),
-                        "observation.images.side": render_cam(cam_side),
+                        "observation.images.up": frame_up,
+                        "observation.images.side": frame_side,
                     }
                 chunk = predict(state) if not _needs_images else predict(state, images)
                 n_use = min(args.action_horizon, len(chunk))
@@ -488,8 +541,22 @@ def main():
             scene.step()
 
             if args.record_video:
-                _rec_frames_up.append(render_cam(cam_up))
-                _rec_frames_side.append(render_cam(cam_side))
+                _rec_frames_up.append(
+                    ablate_camera(
+                        augment_image(render_cam(cam_up), image_rng,
+                                      args.image_noise_std, brightness),
+                        "overhead", args.camera_ablation,
+                        args.camera_ablation_fill,
+                    )
+                )
+                _rec_frames_side.append(
+                    ablate_camera(
+                        augment_image(render_cam(cam_side), image_rng,
+                                      args.image_noise_std, brightness),
+                        "wrist" if args.camera_layout == "up_wrist" else "side",
+                        args.camera_ablation, args.camera_ablation_fill,
+                    )
+                )
 
         # ---- evaluate ----
         lifted = [z >= base_z_cube + args.success_lift_m for z in cube_z_hist]
@@ -549,6 +616,21 @@ def main():
         "surface_z": surface_z,
         "checkpoint": args.checkpoint,
         "policy_type": policy_type,
+        "camera_layout": args.camera_layout,
+        "camera_ablation": args.camera_ablation,
+        "camera_ablation_fill": float(args.camera_ablation_fill),
+        "cube_friction": float(args.cube_friction),
+        "domain_randomization": {
+            "image_noise_std": float(args.image_noise_std),
+            "brightness_range": list(args.brightness_range)
+            if args.brightness_range else [1.0, 1.0],
+        },
+        "episode_manifest": str(args.episode_manifest)
+        if args.episode_manifest else None,
+        "episode_coordinates": [
+            {"episode": i, "cube_local_dxdy": [float(dx), float(dy)]}
+            for i, (dx, dy, _) in enumerate(episode_inits)
+        ],
         "results": all_results,
     }
     (save_dir / "eval_summary.json").write_text(

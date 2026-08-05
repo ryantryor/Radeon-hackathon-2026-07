@@ -28,6 +28,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from vision_utils import ablate_camera, augment_image, resolve_domain_randomization
+
 
 # ---- constants (must match 01_franka_pick_data.py) ----
 JOINT_NAMES = [
@@ -168,6 +170,18 @@ def main():
     ap.add_argument("--record-video", action="store_true")
     ap.add_argument("--task", type=str, default="Pick up the red cube.",
                     help="Language instruction for VLA models (e.g. SmolVLA)")
+    ap.add_argument("--domain-randomization", action="store_true",
+                    help="Enable default brightness and sensor-noise perturbations")
+    ap.add_argument("--image-noise-std", type=float, default=0.0,
+                    help="RGB Gaussian noise standard deviation in pixel values")
+    ap.add_argument("--brightness-range", type=float, nargs=2, default=None,
+                    metavar=("MIN", "MAX"),
+                    help="Per-episode image brightness multiplier range")
+    ap.add_argument("--camera-ablation", default="both",
+                    choices=["both", "overhead_only", "wrist_only"],
+                    help="Mask one visual input while keeping the policy schema unchanged")
+    ap.add_argument("--camera-ablation-fill", type=float, default=127.5,
+                    help="Neutral pixel value used for the masked camera")
     ap.add_argument("--no-bbox-detection", action="store_true",
                     help="Disable box_box_detection (workaround for AMD LLVM fatal)")
     ap.add_argument("--camera-layout", type=str, default="up_side",
@@ -181,6 +195,12 @@ def main():
                     help="Wrist cam up vector in hand-link frame")
     ap.add_argument("--wrist-cam-fov", type=float, default=65.0)
     args = ap.parse_args()
+
+    args.image_noise_std, args.brightness_range = resolve_domain_randomization(
+        args.domain_randomization,
+        args.image_noise_std,
+        tuple(args.brightness_range) if args.brightness_range else None,
+    )
 
     ensure_display()
     import genesis as gs
@@ -386,6 +406,9 @@ def main():
             output_features=output_features,
             chunk_size=chunk_size,
             n_action_steps=chunk_size,
+            # Keep evaluation offline and consistent with training. Without this
+            # explicit local path, SmolVLA falls back to Hugging Face downloads.
+            vlm_model_name="/workspace/models/SmolVLM2-500M-Video-Instruct",
         )
         try:
             vla_policy = SmolVLAPolicy.from_pretrained(str(ckpt_dir), config=cfg, strict=False)
@@ -583,6 +606,11 @@ def main():
     # ---- episode loop ----
     all_results = []
     for ep_idx, (cx, cy, label, init_state) in enumerate(episode_inits):
+        image_rng = np.random.default_rng(args.seed + 100_000 + ep_idx)
+        if args.brightness_range is None:
+            brightness = 1.0
+        else:
+            brightness = float(image_rng.uniform(*args.brightness_range))
         print(f"\n{'='*60}")
         print(f"[ep {ep_idx+1}/{args.n_episodes}] cube=({cx:.3f},{cy:.3f}) "
               f"init={'warm-start' if init_state is not None else 'HOME'}")
@@ -613,8 +641,17 @@ def main():
                 images = None
                 if _needs_images:
                     images = {
-                        "observation.images.up": render_cam(cam_up),
-                        "observation.images.side": render_cam(cam_side),
+                        "observation.images.up": ablate_camera(
+                            augment_image(render_cam(cam_up), image_rng,
+                                          args.image_noise_std, brightness),
+                            "overhead", args.camera_ablation,
+                            args.camera_ablation_fill),
+                        "observation.images.side": ablate_camera(
+                            augment_image(render_cam(cam_side), image_rng,
+                                          args.image_noise_std, brightness),
+                            "wrist" if args.camera_layout == "up_wrist" else "side",
+                            args.camera_ablation,
+                            args.camera_ablation_fill),
                     }
                 chunk = predict(state) if not _needs_images else predict(state, images)
                 n_use = min(args.action_horizon, len(chunk))
@@ -646,8 +683,15 @@ def main():
             scene.step()
 
             if args.record_video:
-                frame_up = render_cam(cam_up)
-                frame_side = render_cam(cam_side)
+                frame_up = ablate_camera(
+                    augment_image(render_cam(cam_up), image_rng,
+                                  args.image_noise_std, brightness),
+                    "overhead", args.camera_ablation, args.camera_ablation_fill)
+                frame_side = ablate_camera(
+                    augment_image(render_cam(cam_side), image_rng,
+                                  args.image_noise_std, brightness),
+                    "wrist" if args.camera_layout == "up_wrist" else "side",
+                    args.camera_ablation, args.camera_ablation_fill)
                 _rec_frames_up.append(frame_up)
                 _rec_frames_side.append(frame_side)
 
@@ -701,6 +745,14 @@ def main():
         "prefix_gt_steps": args.prefix_gt_steps,
         "warm_start": args.warm_start_from_dataset,
         "checkpoint": args.checkpoint,
+        "camera_layout": args.camera_layout,
+        "camera_ablation": args.camera_ablation,
+        "camera_ablation_fill": float(args.camera_ablation_fill),
+        "cube_friction": args.cube_friction,
+        "domain_randomization": {
+            "image_noise_std": float(args.image_noise_std),
+            "brightness_range": list(args.brightness_range) if args.brightness_range else [1.0, 1.0],
+        },
         "results": all_results,
     }
     (save_dir / "eval_summary.json").write_text(

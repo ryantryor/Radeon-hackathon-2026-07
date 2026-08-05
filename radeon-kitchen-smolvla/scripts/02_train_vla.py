@@ -48,6 +48,8 @@ def main():
     )
     ap.add_argument("--log-every", type=int, default=50)
     ap.add_argument("--save-every", type=int, default=500)
+    ap.add_argument("--no-tensorboard", action="store_true",
+                    help="Disable TensorBoard event logging")
     ap.add_argument(
         "--num-workers",
         type=int,
@@ -206,6 +208,15 @@ def main():
     save_dir = Path(args.output_dir) / "train" / args.run_name
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    writer = None
+    if not args.no_tensorboard:
+        try:
+            from torch.utils.tensorboard import SummaryWriter
+            writer = SummaryWriter(log_dir=str(save_dir / "tensorboard"))
+            print(f"[train] TensorBoard log dir: {save_dir / 'tensorboard'}")
+        except Exception as exc:
+            print(f"[train] TensorBoard unavailable, continuing without it: {exc}")
+
     metrics_log = []
     step = 0
     epoch = 0
@@ -249,6 +260,11 @@ def main():
                 "step_time_s": float(step_time),
             }
             metrics_log.append(record)
+            if writer is not None:
+                writer.add_scalar("train/loss", record["loss"], step)
+                writer.add_scalar("train/grad_norm", record["grad_norm"], step)
+                writer.add_scalar("train/learning_rate", record["lr"], step)
+                writer.add_scalar("train/step_time_s", record["step_time_s"], step)
 
             if step % args.log_every == 0 or step == args.n_steps - 1:
                 elapsed = time.time() - t_start
@@ -279,6 +295,9 @@ def main():
     preprocessor.save_pretrained(final_dir)
     postprocessor.save_pretrained(final_dir)
     print(f"  model saved: {final_dir}")
+    if writer is not None:
+        writer.flush()
+        writer.close()
 
     # ---- save metrics ----
     metrics_summary = {
@@ -299,6 +318,9 @@ def main():
         "total_params": total_params,
         "device": str(device),
         "seed": args.seed,
+        "tensorboard": writer is not None,
+        "tensorboard_dir": str(save_dir / "tensorboard")
+        if writer is not None else None,
     }
     (save_dir / "train_summary.json").write_text(
         json.dumps(metrics_summary, indent=2), encoding="utf-8"

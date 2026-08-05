@@ -40,6 +40,8 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
+from vision_utils import augment_image, resolve_domain_randomization
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -55,6 +57,21 @@ def main():
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--task", default="Pick up the cube.")
+    ap.add_argument("--domain-randomization", action="store_true",
+                    help="Enable default brightness and sensor-noise randomization")
+    ap.add_argument("--image-noise-std", type=float, default=0.0,
+                    help="RGB Gaussian noise standard deviation in pixel values")
+    ap.add_argument("--brightness-range", type=float, nargs=2, default=None,
+                    metavar=("MIN", "MAX"),
+                    help="Per-episode image brightness multiplier range")
+    ap.add_argument("--cube-dx-range", type=float, nargs=2, default=None,
+                    metavar=("MIN", "MAX"),
+                    help="Override the randomized cube forward-offset range")
+    ap.add_argument("--cube-dy-range", type=float, nargs=2, default=None,
+                    metavar=("MIN", "MAX"),
+                    help="Override the randomized cube lateral-offset range")
+    ap.add_argument("--cube-placement-manifest", type=Path, default=None,
+                    help="JSON manifest with explicit robot-local cube placements")
     ap.add_argument("--no-videos", action="store_true",
                     help="Store images as PNG instead of video")
     ap.add_argument("--add-phase", action="store_true",
@@ -94,6 +111,11 @@ def main():
     add_pick_args(ap)
     ap.set_defaults(anchor="floor_origin")
     args = ap.parse_args()
+    args.image_noise_std, args.brightness_range = resolve_domain_randomization(
+        args.domain_randomization,
+        args.image_noise_std,
+        tuple(args.brightness_range) if args.brightness_range else None,
+    )
 
     MOTOR_NAMES = [f"{j}.pos" for j in JOINT_NAMES]
     FINGER_OPEN = 0.04
@@ -241,11 +263,38 @@ def main():
     # ------------------------------------------------------------------
     rng = random.Random(args.seed)
     cube_half_z = CUBE_SIZE[2] / 2.0
+    dx_range = tuple(args.cube_dx_range) if args.cube_dx_range else CUBE_RANGE_X
+    dy_range = tuple(args.cube_dy_range) if args.cube_dy_range else CUBE_RANGE_Y
+    if dx_range[0] >= dx_range[1] or dy_range[0] >= dy_range[1]:
+        raise ValueError("cube range minimum must be smaller than maximum")
+
+    placement_values = None
+    if args.cube_placement_manifest is not None:
+        manifest = json.loads(
+            args.cube_placement_manifest.read_text(encoding="utf-8")
+        )
+        placement_values = manifest.get("coordinates", manifest)
+        if not isinstance(placement_values, list) or len(placement_values) < args.n_episodes:
+            raise ValueError(
+                f"placement manifest must contain at least {args.n_episodes} coordinates"
+            )
+        print(f"[gen] fixed placement manifest: {args.cube_placement_manifest}")
 
     episode_points = []
-    for _ in range(args.n_episodes):
-        dx = rng.uniform(*CUBE_RANGE_X)
-        dy = rng.uniform(*CUBE_RANGE_Y)
+    for episode_index in range(args.n_episodes):
+        if placement_values is None:
+            dx = rng.uniform(*dx_range)
+            dy = rng.uniform(*dy_range)
+        else:
+            item = placement_values[episode_index]
+            values = item.get("cube_local_dxdy") if isinstance(item, dict) else item
+            if values is None and isinstance(item, dict):
+                values = item.get("cube_xy")
+            if not isinstance(values, (list, tuple)) or len(values) != 2:
+                raise ValueError(
+                    f"invalid placement at index {episode_index}: {item!r}"
+                )
+            dx, dy = float(values[0]), float(values[1])
         world_pos = to_world(base_xy, yaw_rad, surface_z, (dx, dy, cube_half_z))
         episode_points.append((dx, dy, world_pos))
 
@@ -255,8 +304,8 @@ def main():
     print(f"[gen] scene={args.scene} anchor={args.anchor}")
     print(f"[gen] base=({base_xy[0]:.2f}, {base_xy[1]:.2f}) yaw={yaw}° "
           f"surface_z={surface_z:.3f}")
-    print(f"[gen] cube_dx=[{CUBE_RANGE_X[0]:.2f}, {CUBE_RANGE_X[1]:.2f}]  "
-          f"cube_dy=[{CUBE_RANGE_Y[0]:.2f}, {CUBE_RANGE_Y[1]:.2f}]")
+    print(f"[gen] cube_dx=[{dx_range[0]:.2f}, {dx_range[1]:.2f}]  "
+          f"cube_dy=[{dy_range[0]:.2f}, {dy_range[1]:.2f}]")
     print(f"[gen] {args.n_episodes} episodes to generate")
 
     # ------------------------------------------------------------------
@@ -281,6 +330,11 @@ def main():
 
     for ep in range(args.n_episodes):
         dx, dy, (cx, cy, cz) = episode_points[ep]
+        image_rng = np.random.default_rng(args.seed + 100_000 + ep)
+        if args.brightness_range is None:
+            brightness = 1.0
+        else:
+            brightness = float(image_rng.uniform(*args.brightness_range))
 
         reset_episode((cx, cy, cz))
 
@@ -313,8 +367,10 @@ def main():
                 parts.append(t_norm)
             state = np.concatenate(parts) if len(parts) > 1 else joints
 
-            img_up = render_cam(cam_up)
-            img_side = render_cam(cam_side)
+            img_up = augment_image(render_cam(cam_up), image_rng,
+                                   args.image_noise_std, brightness)
+            img_side = augment_image(render_cam(cam_side), image_rng,
+                                     args.image_noise_std, brightness)
 
             if step_idx in smoke_frames:
                 _save_png(smoke_dir / f"ep0_f{step_idx:03d}_up.png", img_up)
@@ -404,8 +460,14 @@ def main():
         "base_xy": list(base_xy),
         "yaw": yaw,
         "surface_z": surface_z,
-        "cube_dx_range": list(CUBE_RANGE_X),
-        "cube_dy_range": list(CUBE_RANGE_Y),
+        "cube_dx_range": list(dx_range),
+        "cube_dy_range": list(dy_range),
+        "placement_manifest": str(args.cube_placement_manifest)
+        if args.cube_placement_manifest else None,
+        "domain_randomization": {
+            "image_noise_std": float(args.image_noise_std),
+            "brightness_range": list(args.brightness_range) if args.brightness_range else [1.0, 1.0],
+        },
         "success_episode_ids": success_ids,
         "failure_episode_ids": failure_ids,
         "success_rate": sr,
