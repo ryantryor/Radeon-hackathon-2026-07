@@ -351,6 +351,7 @@ parameter through `--cube-friction`.
 
 - Public video URL: TBD after YouTube or Bilibili upload.
 - Local preview: demo/radeon_kitchen_smolvla_demo_preview.mp4 if copied from the workspace root.
+- Final local render: videos/radeon_kitchen_smolvla_final_demo.mp4 (100 seconds, 1080p).
 - Script: videos/demo_script.md
 - Submission target: public 1080p+ video, no longer than 3 minutes.
 - Required structure: problem, demo, method, metrics, limitations, next steps.

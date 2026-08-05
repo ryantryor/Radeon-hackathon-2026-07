@@ -2,6 +2,10 @@
 
 Public video URL: TBD after YouTube or Bilibili upload.
 
+Final local render: `radeon_kitchen_smolvla_final_demo.mp4` (100 seconds,
+1920x1080, English narration, bilingual on-screen text). The original
+`radeon_kitchen_smolvla_demo_preview.mp4` is preserved separately.
+
 Use demo_script.md as the narration and editing plan. The final video must be
 3 minutes or shorter, include both success and failure clips, and end with the
 GitHub URL and team name.
