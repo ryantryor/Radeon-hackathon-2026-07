@@ -52,6 +52,26 @@ Extended evidence is recorded in [analysis/extended_eval_comparison.md](analysis
 | Camera dropout / local occlusion | 20 | 4/20 = 20% | 40% |
 | Action delay / low friction | 20 | 8/20 = 40% | 80% |
 
+### Multi-strength sweep
+
+The intensity sweep runs 19 paired points: one nominal control plus three
+levels for brightness, RGB noise, local occlusion, action delay, and both
+directions of friction change. Each point uses 20 episodes from the same
+placement manifest.
+
+| Stress family | Physical levels | Success rates |
+|---|---|---|
+| Brightness | +/-5%, +/-15%, +/-25% | 40%, 60%, 45% |
+| RGB noise | std 2, 4, 8 | 10%, 45%, 15% |
+| Local occlusion | 10%, 25%, 40% image side length | 20%, 5%, 0% |
+| Action delay | 1, 2, 4 control steps | 55%, 55%, 45% |
+| Friction low | mu 1.4, 1.2, 1.0 | 45%, 50%, 65% |
+| Friction high | mu 1.6, 1.8, 2.0 | 60%, 50%, 30% |
+
+The strongest monotonic signal is local occlusion. Other curves are retained
+without smoothing because success is a binomial estimate and the 20-episode
+sample has visible variance.
+
 The full matrix includes brightness, RGB noise, and high-friction controls.
 The two 55% stressed rows are not treated as improvements because 20 episodes
 are noisy; the result is used to measure sensitivity, not to claim monotonic
@@ -68,6 +88,10 @@ The analysis artifacts are in analysis/:
 - analysis/new_eval/*.json
 - analysis/robustness/robustness_summary.md
 - analysis/robustness/robustness_envelope.svg
+- analysis/robustness/robustness_sweep_runs.json
+- analysis/robustness/robustness_sweep_summary.csv
+- analysis/robustness/robustness_sweep_summary.md
+- analysis/robustness/robustness_intensity_envelope.svg
 - analysis/mixed_replay_v4_summary.json
 - analysis/mixed_replay_train_summary.json
 
@@ -335,6 +359,24 @@ The current reproducible profile randomizes per-episode brightness in
 The nominal dataset path remains unchanged when `--domain-randomization` is
 omitted.
 
+3. Run the multi-strength envelope:
+
+       python scripts/11_run_robustness_sweep.py \
+         --checkpoint output/train/smolvla_kitchen_wrist/final \
+         --dataset-id local/franka-kitchen-wrist-100ep \
+         --episode-manifest analysis/manifests/eval_manifest_seed99_50.json \
+         --n-episodes 20 \
+         --seed 99 \
+         --output-dir output
+
+       python scripts/12_summarize_robustness_sweep.py \
+         --input output/eval/robustness_sweep/robustness_sweep_runs.json
+
+The sweep produces one nominal control and three physical intensity levels
+for each visual, timing, and contact stress family. The output SVG uses thin
+95% Wilson interval bars and does not force the measured points to be
+monotonic.
+
 4. Validate source datasets and build mixed replay:
 
        python scripts/08_validate_dataset.py \
@@ -442,6 +484,7 @@ parameter through `--cube-friction`.
 - Public video URL: TBD after YouTube or Bilibili upload.
 - Local preview: demo/radeon_kitchen_smolvla_demo_preview.mp4 if copied from the workspace root.
 - Final local render: videos/radeon_kitchen_smolvla_final_demo_robustness.mp4 (116 seconds, 1080p).
+- Intensity-sweep render: videos/radeon_kitchen_smolvla_final_demo_intensity_sweep.mp4 (132 seconds, 1080p).
 - Previous fallback render: videos/radeon_kitchen_smolvla_final_demo.mp4 (100 seconds, 1080p).
 - Script: videos/demo_script.md
 - Submission target: public 1080p+ video, no longer than 3 minutes.
@@ -454,6 +497,7 @@ parameter through `--cube-friction`.
 - The current best model is not robust across seeds yet: 42% on the paired 50-episode seed-99 manifest versus 5% on the earlier 20-episode seed-123 control.
 - The 2:1 mixed replay candidate was measured and rejected: 20% on the paired 50-episode set and 25% on a 20-episode seed-123 subset.
 - Camera dropout and occlusion each reduced the robustness-matrix baseline to 20%, showing that missing visual evidence is the highest-priority next training target.
+- The intensity sweep makes this visible at multiple levels: local occlusion falls from 20% to 5% to 0% as the occlusion side length increases from 10% to 40%.
 - The robustness matrix measures several synthetic gaps; it does not claim that a real robot will match simulation.
 - Domain randomization can be extended to textures, cube color and size, background clutter, camera intrinsics, and calibrated real-image statistics.
 - The uncertainty probe is an evaluation-time diagnostic; at threshold `0.03` it triggered zero warnings in 10 episodes, so it is not presented as a demonstrated improvement.

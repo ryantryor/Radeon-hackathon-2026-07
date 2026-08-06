@@ -38,6 +38,7 @@ Current best checkpoint: output/train/smolvla_kitchen_wrist/final
 | mixed_replay_nominal_seed99_50 | output/train/smolvla_kitchen_mixed_replay_v4/final | local/franka-kitchen-wrist-mixed-replay-v4 | Pick up the cube. | 50 | 99 | 10/50 = 20% | copied to analysis/new_eval | Candidate rejected |
 | mixed_replay_nominal_seed123_20 | output/train/smolvla_kitchen_mixed_replay_v4/final | local/franka-kitchen-wrist-mixed-replay-v4 | Pick up the cube. | 20 | 123 | 5/20 = 25% | copied to analysis/new_eval | Second-seed subset |
 | uncertainty_probe_seed99_10 | output/train/smolvla_kitchen_wrist/final | local/franka-kitchen-wrist-100ep | Pick up the cube. | 10 | 99 | 3/10 = 30% | copied to analysis/new_eval | Zero threshold crossings at 0.03 |
+| robustness_intensity_sweep | output/train/smolvla_kitchen_wrist/final | local/franka-kitchen-wrist-100ep | Pick up the cube. | 19 x 20 | 99 | see sweep table | copied to analysis/robustness | 1 nominal + 18 multi-strength stress points |
 
 ## Analysis Artifacts
 
@@ -52,6 +53,10 @@ Current best checkpoint: output/train/smolvla_kitchen_wrist/final
 | analysis/new_eval/*.json | Camera, mixed replay, and uncertainty summaries |
 | analysis/robustness/robustness_summary.md | Wilson intervals and retention table |
 | analysis/robustness/robustness_envelope.svg | Sim-to-Real robustness envelope plot |
+| analysis/robustness/robustness_sweep_runs.json | Raw 19-point intensity sweep summaries |
+| analysis/robustness/robustness_sweep_summary.csv | Sweep rates, Wilson intervals, and retention |
+| analysis/robustness/robustness_sweep_summary.md | Human-readable intensity table |
+| analysis/robustness/robustness_intensity_envelope.svg | Multi-strength performance curves |
 | analysis/mixed_replay_v4_summary.json | Exact dataset composition and protocol validation |
 | analysis/mixed_replay_train_summary.json | Candidate training configuration and loss |
 
@@ -66,6 +71,7 @@ Current best checkpoint: output/train/smolvla_kitchen_wrist/final
 - The exact 2:1 mixed replay candidate used 80 broad plus 40 targeted episodes, but scored 20% on the paired 50-episode set and was rejected.
 - The robustness matrix measured 50% nominal, 20% under camera dropout, 20% under local occlusion, 40% under two-step delay, and 40% under low friction.
 - The uncertainty probe completed 3/10 with zero threshold crossings at `0.03`; it remains a diagnostic interface, not a demonstrated recovery gain.
+- The multi-strength sweep kept all 19 points visible. Local occlusion fell from 20% to 5% to 0% at 10%, 25%, and 40% side-length stress; the other families show the expected sampling variance of 20-episode binomial estimates.
 
 ## Decision
 

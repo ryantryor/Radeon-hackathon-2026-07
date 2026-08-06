@@ -2,8 +2,8 @@
 
 Public video URL: TBD after YouTube or Bilibili upload.
 
-Final local render: `radeon_kitchen_smolvla_final_demo_robustness.mp4` (116
-seconds, 1920x1080, English narration, bilingual on-screen text). The earlier
+Final local render: `radeon_kitchen_smolvla_final_demo_intensity_sweep.mp4`
+(132 seconds, 1920x1080, English narration, bilingual on-screen text). The earlier
 `radeon_kitchen_smolvla_demo_preview.mp4` is preserved separately.
 The 100-second `radeon_kitchen_smolvla_final_demo.mp4` is also preserved as a
 fallback cut.
@@ -17,4 +17,6 @@ Recommended evidence to include:
 - Best success video from output/eval/kitchen_eval_prompt_cube/videos/
 - One failure video from output/eval/kitchen_eval_prompt_cube/videos/
 - analysis/failure_coordinate_scatter.svg
+- analysis/robustness/robustness_intensity_envelope.svg
+- The final render's nominal-versus-40%-occlusion four-panel clip
 - The experiment table from README.md or analysis/eval_comparison.md

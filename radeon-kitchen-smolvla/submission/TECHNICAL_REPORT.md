@@ -100,6 +100,23 @@ The larger paired camera comparison shows that the current policy depends on
 complementary views. Keeping both cameras achieved 42%, while neutralizing the
 wrist or overhead input reduced success to 10% and 2% respectively.
 
+The multi-strength sweep uses one nominal control plus three levels for each
+stress family, with 20 episodes per point and the same placement manifest:
+
+| Stress family | Levels | Success rates |
+|---|---|---|
+| Brightness | +/-5%, +/-15%, +/-25% | 40%, 60%, 45% |
+| RGB noise | std 2, 4, 8 | 10%, 45%, 15% |
+| Local occlusion | 10%, 25%, 40% image side length | 20%, 5%, 0% |
+| Action delay | 1, 2, 4 steps | 55%, 55%, 45% |
+| Friction low | 1.4, 1.2, 1.0 | 45%, 50%, 65% |
+| Friction high | 1.6, 1.8, 2.0 | 60%, 50%, 30% |
+
+The envelope plot includes 95% Wilson interval bars. The results are not
+smoothed: the sharp local-occlusion decline is the clearest causal signal,
+while the other families show finite-sample variance rather than a guaranteed
+monotonic law.
+
 The baseline remains the submission checkpoint because it has the best
 controlled seed-99 result. The seed-123 result is disclosed as evidence that
 the current policy is not yet robust.

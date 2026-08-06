@@ -87,6 +87,26 @@ policy. The stronger engineering conclusion is that missing visual evidence
 caused the largest measured degradation, followed by timing and low-friction
 stress.
 
+## Multi-strength evidence
+
+The single-point matrix is complemented by a 19-point intensity sweep: one
+nominal control plus three levels for each stress family, all with 20 episodes
+and the same placement manifest.
+
+| Stress family | Levels | Success rates |
+|---|---|---|
+| Brightness | +/-5%, +/-15%, +/-25% | 40%, 60%, 45% |
+| RGB noise | std 2, 4, 8 | 10%, 45%, 15% |
+| Local occlusion | 10%, 25%, 40% image side length | 20%, 5%, 0% |
+| Action delay | 1, 2, 4 steps | 55%, 55%, 45% |
+| Friction low | 1.4, 1.2, 1.0 | 45%, 50%, 65% |
+| Friction high | 1.6, 1.8, 2.0 | 60%, 50%, 30% |
+
+The occlusion curve gives the clearest transfer envelope: 20% success at the
+lowest tested mask, 5% at the middle level, and 0% at the largest level. The
+other curves are intentionally not smoothed; their local increases are
+sampling variance from 20 binomial episodes per point.
+
 ## Lightweight uncertainty probe
 
 With `--uncertainty-samples 3`, the evaluator runs the same observation through

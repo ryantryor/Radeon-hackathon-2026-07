@@ -1,104 +1,102 @@
 # Demo Video Script
 
-Target duration: 2 minutes 50 seconds (must be no longer than 3 minutes).
+Target duration: 2 minutes 12 seconds (must be no longer than 3 minutes).
 
-## 0:00-0:15 - Task
+## 0:00-0:05 - Task
 
-Show a successful pick from the current best seed-99 evaluation, followed by
-the rustic kitchen scene and several cube placements.
+Show the successful pick before explaining the method.
 
 Narration:
 
-> This project studies a vision-language-action policy for a Franka Panda
-> robot. The task is simple to describe: pick up the cube. The challenge is
-> making the action remain stable when the policy observes its own mistakes in
-> a closed loop.
+> This is a vision-language-action policy for a Franka Panda robot. The task
+> is simple to describe: pick up the cube. The challenge is keeping the
+> action stable in a closed loop.
 
-## 0:15-0:45 - Pipeline
+## 0:05-0:29 - Pipeline
 
-Show the command line, Genesis expert data generation, and the two camera
-streams.
+Show the title, Genesis expert data, LeRobot fields, SmolVLA fine-tuning, and
+the synchronized overhead and wrist views.
 
 Narration:
 
 > We generate scripted expert trajectories in Genesis, store synchronized
 > state, action, image, and task fields in LeRobot format, fine-tune SmolVLA
-> on an AMD Radeon ROCm environment, and evaluate the learned policy back in
-> the same simulated kitchen.
+> on AMD Radeon ROCm, and evaluate the policy back in the same kitchen.
 
-On-screen labels:
+## 0:29-0:52 - Results and failure
 
-- Genesis expert data
-- LeRobot dataset
-- SmolVLA fine-tuning
-- Closed-loop Genesis evaluation
-
-## 0:45-1:20 - Technical Evidence
-
-Show the training log, TensorBoard event directory, and
-`analysis/failure_coordinate_scatter.svg`.
+Show the controlled result cards, then one failure clip.
 
 Narration:
 
-> The primary metric is closed-loop success, not imitation loss. We ran
-> controlled comparisons for prompt wording, effective training steps, a
-> second evaluation seed, and targeted-only fine-tuning. The failure plot
-> records where the cube was placed and whether the policy completed a
-> sustained lift.
+> The aligned prompt baseline reached 55 percent on 20 seed-99 episodes. A
+> prompt mismatch scored 35 percent, eight thousand effective steps scored
+> 40 percent, and the second seed scored 5 percent. Loss alone is not the
+> task metric, so we keep the failure in the story.
 
-## 1:20-1:55 - Results
+## 0:52-1:08 - Failure coordinates
 
-Show one success video, one failure video, and the experiment table.
-
-Narration:
-
-> The current fallback checkpoint is the original 4,000-step fine-tune. With
-> the dataset-aligned instruction, it succeeded in 11 of 20 seed-99 episodes,
-> or 55 percent. A prompt mismatch scored 35 percent. Continuing to an
-> effective 8,000 steps scored 40 percent, while targeted-only fine-tuning
-> scored 5 percent. The same baseline also scored 5 percent on seed 123, so
-> robustness remains an open problem.
-
-## 1:55-2:25 - Failure-aware robustness experiments
-
-Show the fixed manifest, the three camera-ablation labels, the mixed replay
-command, and the robustness envelope output.
+Show `analysis/failure_coordinate_scatter.svg` and the targeted-data rationale.
 
 Narration:
 
-> The next experiments isolate causes instead of hiding variance. We generate
-> targeted placements from observed failure coordinates, mix them with broad
-> replay data at two to one, and evaluate the same placement manifest under
-> full-view, overhead-only, wrist-only, camera dropout, occlusion, timing
-> delay, and friction changes. The paired camera study gives 42 percent with
-> both views, 10 percent with only overhead, and 2 percent with only the wrist
-> camera. The mixed replay candidate scored 20 percent on the same 50
-> placements, so we keep the original baseline instead of hiding a negative
-> result.
+> The failure plot maps the cube placement for every episode. Failures cluster
+> near far reach and lateral boundaries. Targeted-only fine-tuning collapsed
+> to 5 percent, which motivates broad replay instead of replacing the data
+> distribution.
 
-## 2:25-2:42 - Sim-to-Real envelope
+## 1:08-1:26 - Multi-strength robustness envelope
 
-Show `robustness_envelope.svg`, then `docs/sim_to_real.md`.
+Show `analysis/robustness/robustness_intensity_envelope.svg`.
 
 Narration:
 
-> The envelope reports stressed success divided by nominal success. It makes
-> the transfer boundary visible: nominal performance is 50 percent, camera
-> dropout and local occlusion fall to 20 percent, and action delay or low
-> friction reach 40 percent. These are still simulation results. Real transfer
-> requires camera calibration, contact
-> identification, controller latency matching, and guarded low-speed tests.
+> We sweep perturbation intensity instead of reporting one stressed success
+> rate. Every point uses the same placement manifest and 20 episodes. The
+> clearest envelope is local occlusion: success falls from 20 to 5 to 0
+> percent as the masked image side length grows from 10 to 25 to 40 percent.
+> The other curves stay unsmoothed because they are binomial estimates.
 
-## 2:42-2:55 - Closing
+## 1:26-1:40 - Visual mechanism
 
-Show the repository URL, team name, and artifact paths.
+Show the four-panel nominal versus 40 percent occlusion clip.
 
 Narration:
 
-> The deliverable is a reproducible AMD ROCm workflow from synthetic expert
-> data to closed-loop VLA evaluation, with negative controls, failure-aware
-> data replay, a measured robustness envelope, and a concrete path toward
-> real-robot calibration.
+> The top row has normal observations. The bottom row masks visual evidence
+> in both cameras. In the short probe, nominal completes one of three episodes
+> while the occluded condition completes zero. This is the mechanism behind
+> the red curve, not just a number in a table.
+
+## 1:40-1:52 - Failure-aware replay
+
+Show the mixed replay card.
+
+Narration:
+
+> We generated hard cases from failure coordinates and mixed them with broad
+> replay at two to one. The candidate scored 20 percent on the paired 50
+> episode set, below the baseline's 42 percent, so we reject it and preserve
+> the original 4,000-step checkpoint.
+
+## 1:52-2:04 - Sim-to-Real limits
+
+Show the calibration plan.
+
+Narration:
+
+> These are Genesis results, not a real-robot guarantee. Real transfer needs
+> camera calibration, contact identification, controller latency matching,
+> and guarded low-speed tests.
+
+## 2:04-2:12 - Closing
+
+Show the repository URL, team name, and track.
+
+Narration:
+
+> The deliverable is an open reproducible AMD ROCm workflow from synthetic
+> expert data to closed-loop VLA evaluation, with measured transfer risks.
 
 Final frame:
 

@@ -52,6 +52,25 @@ with 20 episodes, binomial variance can make a stressed condition exceed the
 nominal count. The useful signal is sensitivity: camera evidence loss is the
 largest measured degradation, followed by timing and low-friction stress.
 
+## Multi-strength sweep
+
+The expanded sweep uses 20 episodes at every point and the same placement
+manifest. Severity is normalized within each family; the listed values are the
+actual simulator parameters.
+
+| Family | Levels | Success rates |
+|---|---|---|
+| Brightness | +/-5%, +/-15%, +/-25% | 40%, 60%, 45% |
+| RGB noise | std 2, 4, 8 | 10%, 45%, 15% |
+| Local occlusion | 10%, 25%, 40% image side length | 20%, 5%, 0% |
+| Action delay | 1, 2, 4 steps | 55%, 55%, 45% |
+| Friction low | 1.4, 1.2, 1.0 | 45%, 50%, 65% |
+| Friction high | 1.6, 1.8, 2.0 | 60%, 50%, 30% |
+
+The red occlusion curve is the clearest monotonic signal. The other curves
+remain unsmoothed and include 95% Wilson bars in the SVG because episode-level
+success is noisy at this sample size.
+
 ## Uncertainty Probe
 
 The three-pass visual-consistency probe completed 10 episodes with 3/10
