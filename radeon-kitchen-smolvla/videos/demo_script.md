@@ -70,7 +70,11 @@ Narration:
 > targeted placements from observed failure coordinates, mix them with broad
 > replay data at two to one, and evaluate the same placement manifest under
 > full-view, overhead-only, wrist-only, camera dropout, occlusion, timing
-> delay, and friction changes.
+> delay, and friction changes. The paired camera study gives 42 percent with
+> both views, 10 percent with only overhead, and 2 percent with only the wrist
+> camera. The mixed replay candidate scored 20 percent on the same 50
+> placements, so we keep the original baseline instead of hiding a negative
+> result.
 
 ## 2:25-2:42 - Sim-to-Real envelope
 
@@ -79,9 +83,10 @@ Show `robustness_envelope.svg`, then `docs/sim_to_real.md`.
 Narration:
 
 > The envelope reports stressed success divided by nominal success. It makes
-> the transfer boundary visible: visual stress tests probe missing evidence,
-> delay probes timing, and friction probes contact dynamics. These are still
-> simulation results. Real transfer requires camera calibration, contact
+> the transfer boundary visible: nominal performance is 50 percent, camera
+> dropout and local occlusion fall to 20 percent, and action delay or low
+> friction reach 40 percent. These are still simulation results. Real transfer
+> requires camera calibration, contact
 > identification, controller latency matching, and guarded low-speed tests.
 
 ## 2:42-2:55 - Closing

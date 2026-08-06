@@ -13,6 +13,17 @@ from pathlib import Path
 import numpy as np
 
 
+# LeRobot creates these bookkeeping columns when an episode is saved. They
+# belong in metadata/parquet output, but must not be passed back to add_frame().
+_AUTO_FEATURES = {
+    "timestamp",
+    "frame_index",
+    "episode_index",
+    "index",
+    "task_index",
+}
+
+
 def _import_lerobot():
     try:
         from lerobot.common.datasets.lerobot_dataset import (
@@ -138,6 +149,8 @@ def main() -> None:
             raw = dataset[frame_index]
             frame = {}
             for key in original_meta.features:
+                if key in _AUTO_FEATURES:
+                    continue
                 if key not in raw:
                     raise RuntimeError(
                         f"frame {source_name}:{frame_index} is missing feature {key}"

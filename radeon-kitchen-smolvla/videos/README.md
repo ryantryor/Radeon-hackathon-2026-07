@@ -2,9 +2,11 @@
 
 Public video URL: TBD after YouTube or Bilibili upload.
 
-Final local render: `radeon_kitchen_smolvla_final_demo.mp4` (100 seconds,
-1920x1080, English narration, bilingual on-screen text). The original
+Final local render: `radeon_kitchen_smolvla_final_demo_robustness.mp4` (116
+seconds, 1920x1080, English narration, bilingual on-screen text). The earlier
 `radeon_kitchen_smolvla_demo_preview.mp4` is preserved separately.
+The 100-second `radeon_kitchen_smolvla_final_demo.mp4` is also preserved as a
+fallback cut.
 
 Use demo_script.md as the narration and editing plan. The final video must be
 3 minutes or shorter, include both success and failure clips, and end with the

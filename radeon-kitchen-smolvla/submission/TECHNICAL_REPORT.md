@@ -83,6 +83,22 @@ video data and evidence clips.
 | Effective 8,000-step control | 20 | 99 | 8/20 = 40% |
 | Baseline second seed | 20 | 123 | 1/20 = 5% |
 | Targeted-only fine-tune | 20 | 99 | 1/20 = 5% |
+| Paired baseline, both cameras | 50 | 99 | 21/50 = 42% |
+| Paired baseline, overhead only | 50 | 99 | 5/50 = 10% |
+| Paired baseline, wrist only | 50 | 99 | 1/50 = 2% |
+| Mixed replay candidate, paired manifest | 50 | 99 | 10/50 = 20% |
+| Mixed replay candidate, second-seed subset | 20 | 123 | 5/20 = 25% |
+
+The mixed replay dataset used exactly 80 broad episodes plus 40 targeted
+failure-coordinate episodes, a 2:1 ratio and 16,200 frames. It was trained
+for 2,000 steps at learning rate `5e-5`. The candidate was rejected because
+its paired closed-loop success was below the original baseline. This is an
+important negative control: lower training loss does not automatically imply
+better manipulation.
+
+The larger paired camera comparison shows that the current policy depends on
+complementary views. Keeping both cameras achieved 42%, while neutralizing the
+wrist or overhead input reduced success to 10% and 2% respectively.
 
 The baseline remains the submission checkpoint because it has the best
 controlled seed-99 result. The seed-123 result is disclosed as evidence that
@@ -119,18 +135,26 @@ evidence; action delay probes timing; friction sweeps probe contact dynamics.
 The results are stored under `output/eval/robustness_matrix/` and summarized by
 `scripts/10_summarize_robustness.py` with Wilson intervals.
 
+The completed 20-episode paired matrix measured: nominal 50%; brightness
+`[0.85, 1.15]` 55%; RGB noise std 4, 45%; camera dropout 20%; local occlusion
+20%; two-step action delay 40%; low friction 40%; and high friction 55%.
+Relative to nominal, the most important measured degradations were camera
+dropout and occlusion at 40% retention, followed by delay and low friction at
+80% retention. The two 55% rows are not interpreted as improvements because
+the matrix is a small binomial sample and the stressed placements can be
+slightly easier by chance.
+
 ## 9. Limitations and Next Experiments
 
-The next high-value experiments are:
+Completed evidence now includes the paired 50-episode camera ablation, the
+exact 2:1 mixed replay candidate, and the robustness matrix. The highest-value
+remaining experiment is to retrain with camera-dropout augmentation and select
+the checkpoint on a held-out paired manifest. The uncertainty probe also needs
+threshold calibration on a held-out failure set: the current threshold `0.03`
+triggered zero warnings in 10 episodes, so it is not claimed as a benefit.
 
-1. Run the paired 50-episode camera ablation and robustness matrix on the ROCm
-   cloud runtime.
-2. Generate targeted hard-case data, mix it with the original 100 episodes at
-   2:1 replay-to-targeted ratio, and evaluate the candidate on both seeds.
-3. Compare camera-dropout training against nominal training under the same
-   manifest.
-4. Calibrate the synthetic stressor ranges from real camera and controller
-   measurements before any hardware claim.
+Before any hardware claim, the synthetic stressor ranges must be calibrated
+from real camera and controller measurements.
 
 These experiments are designed to improve evidence quality and technical depth
 without hiding the negative controls.

@@ -22,7 +22,8 @@ Current best submission checkpoint / 当前提交模型:
 - Checkpoint: output/train/smolvla_kitchen_wrist/final
 - Dataset: local/franka-kitchen-wrist-100ep
 - Prompt: Pick up the cube.
-- Best controlled result: 11/20 = 55% on seed 99
+- Best small controlled result: 11/20 = 55% on seed 99
+- Larger paired baseline: 21/50 = 42% on a fixed seed-99 placement manifest
 - Robustness note: the same checkpoint scored 1/20 = 5% on seed 123, so the result is promising but not yet robust across random placements.
 - Research framing: **Failure-Aware SmolVLA for cluttered kitchen manipulation**.
 
@@ -35,6 +36,26 @@ Current best submission checkpoint / 当前提交模型:
 | More steps control | Effective 8,000-step baseline | Pick up the cube. | 20 | 99 | 8/20 = 40% | Lower or similar loss does not guarantee better closed-loop control. |
 | Second seed | 4,000-step baseline | Pick up the cube. | 20 | 123 | 1/20 = 5% | Evaluation variance is high and must be disclosed. |
 | Targeted-only fine-tune | 4,000-step targeted data run | Pick up the cube. | 20 | 99 | 1/20 = 5% | Hard-case-only data likely caused distribution shift or forgetting. |
+| Paired 50-episode baseline | 4,000-step baseline | Pick up the cube. | 50 | 99 | 21/50 = 42% | Larger fixed-manifest estimate for comparisons. |
+| Mixed replay candidate | 2,000-step, LR `5e-5` | Pick up the cube. | 50 | 99 | 10/50 = 20% | Negative result; keep the original baseline. |
+
+Extended evidence is recorded in [analysis/extended_eval_comparison.md](analysis/extended_eval_comparison.md).
+
+### Camera and Sim-to-Real Evidence
+
+| Condition | Episodes | Success | Retention |
+|---|---:|---:|---:|
+| Both cameras | 50 | 21/50 = 42% | 100% |
+| Overhead only | 50 | 5/50 = 10% | 24% |
+| Wrist only | 50 | 1/50 = 2% | 5% |
+| Nominal robustness matrix | 20 | 10/20 = 50% | 100% |
+| Camera dropout / local occlusion | 20 | 4/20 = 20% | 40% |
+| Action delay / low friction | 20 | 8/20 = 40% | 80% |
+
+The full matrix includes brightness, RGB noise, and high-friction controls.
+The two 55% stressed rows are not treated as improvements because 20 episodes
+are noisy; the result is used to measure sensitivity, not to claim monotonic
+degradation under every random perturbation.
 
 The analysis artifacts are in analysis/:
 
@@ -42,6 +63,13 @@ The analysis artifacts are in analysis/:
 - analysis/eval_episode_records.csv
 - analysis/failure_coordinate_scatter.svg
 - analysis/raw_eval/*.json
+- analysis/extended_eval_comparison.md
+- analysis/manifests/*.json
+- analysis/new_eval/*.json
+- analysis/robustness/robustness_summary.md
+- analysis/robustness/robustness_envelope.svg
+- analysis/mixed_replay_v4_summary.json
+- analysis/mixed_replay_train_summary.json
 
 ## Development Process / 开发过程
 
@@ -111,11 +139,11 @@ The failure coordinate scatter plot shows where each model succeeds or fails in 
 
 Next training plan / 下一步训练计划:
 
-1. Keep the original 100 episodes as replay data.
-2. Add targeted data around the repeated failure regions.
-3. Train on a mixed dataset, for example original:targeted at 2:1 or 3:1.
-4. Use a lower learning rate or fewer fine-tune steps.
-5. Re-evaluate with seed 99 and seed 123 before claiming improvement.
+1. Kept broad replay data and generated 40 targeted episodes around failure coordinates.
+2. Built an exact 2:1 mix: 80 broad episodes plus 40 targeted episodes.
+3. Trained a conservative 2,000-step candidate at `5e-5`.
+4. Re-evaluated on paired seed-99 and second-seed subsets.
+5. Rejected the candidate after 20% on the paired 50-episode set; the original 4,000-step checkpoint remains the submission model.
 
 ## Code Sources and Original Contributions / 代码来源说明
 
@@ -226,7 +254,7 @@ On Linux/ROCm, the equivalent Python commands below can be used directly.
        python scripts/09_run_robustness_matrix.py \
          --checkpoint output/train/smolvla_kitchen_wrist/final \
          --dataset-id local/franka-kitchen-wrist-100ep \
-         --episode-manifest analysis/eval_manifest_seed99_50.json \
+         --episode-manifest analysis/manifests/eval_manifest_seed99_50.json \
          --n-episodes 50 \
          --seed 99 \
          --output-dir output
@@ -266,7 +294,7 @@ comparisons are paired rather than based on different random placements.
        python scripts/07_make_eval_manifest.py \
          --n-episodes 50 \
          --seed 99 \
-         --out analysis/eval_manifest_seed99_50.json
+         --out analysis/manifests/eval_manifest_seed99_50.json
 
 2. Run the camera ablation on the custom kitchen scene:
 
@@ -280,7 +308,7 @@ comparisons are paired rather than based on different random placements.
            --anchor floor_origin \
            --camera-layout up_wrist \
            --camera-ablation "$mode" \
-           --episode-manifest analysis/eval_manifest_seed99_50.json \
+           --episode-manifest analysis/manifests/eval_manifest_seed99_50.json \
            --n-episodes 50 \
            --seed 99 \
            --run-name "camera_ablation_${mode}"
@@ -321,7 +349,7 @@ omitted.
          --eval analysis/raw_eval/baseline_4000_prompt_cube_seed99.json \
          --n-episodes 40 \
          --seed 2026 \
-         --out analysis/targeted_manifest_from_failures.json
+         --out analysis/manifests/targeted_manifest_from_failures_v2.json
 
        python scripts/02_gen_data_custom_scene.py \
          --scene rustic_kitchen \
@@ -329,13 +357,13 @@ omitted.
          --camera-layout up_wrist \
          --n-episodes 40 \
          --seed 2026 \
-         --cube-placement-manifest analysis/targeted_manifest_from_failures.json \
+         --cube-placement-manifest analysis/manifests/targeted_manifest_from_failures_v2.json \
          --repo-id local/franka-kitchen-wrist-targeted-v2
 
        python scripts/06_make_mixed_dataset.py \
          --original-id local/franka-kitchen-wrist-100ep \
          --targeted-id local/franka-kitchen-wrist-targeted-v2 \
-         --output-id local/franka-kitchen-wrist-mixed-replay \
+         --output-id local/franka-kitchen-wrist-mixed-replay-v4 \
          --original-per-targeted 2
 
 The mixed-dataset tool copies complete episodes, checks camera/state/action
@@ -345,7 +373,7 @@ schema equality, recomputes statistics, and writes
 5. Train a conservative mixed-replay candidate and keep TensorBoard logs:
 
        python scripts/02_train_vla.py \
-         --dataset-id local/franka-kitchen-wrist-mixed-replay \
+         --dataset-id local/franka-kitchen-wrist-mixed-replay-v4 \
          --pretrained /workspace/models/smolvla_base \
          --n-steps 2000 \
          --lr 0.00005 \
@@ -353,7 +381,7 @@ schema equality, recomputes statistics, and writes
          --num-workers 4 \
          --run-name smolvla_kitchen_mixed_replay
 
-       tensorboard --logdir output/train/smolvla_kitchen_mixed_replay/tensorboard
+       tensorboard --logdir output/train/smolvla_kitchen_mixed_replay_v4/tensorboard
 
 The learning rate and step count above are an explicit candidate experiment,
 not values stated by the tutorial. They should be accepted or rejected by
@@ -364,27 +392,27 @@ closed-loop success, not by training loss alone.
 
        python scripts/04_eval_custom_scene.py \
          --policy-type smolvla \
-         --checkpoint output/train/smolvla_kitchen_mixed_replay/final \
-         --dataset-id local/franka-kitchen-wrist-mixed-replay \
+         --checkpoint output/train/smolvla_kitchen_mixed_replay_v4/final \
+         --dataset-id local/franka-kitchen-wrist-mixed-replay-v4 \
          --task="Pick up the cube." \
          --scene rustic_kitchen \
          --anchor floor_origin \
          --camera-layout up_wrist \
-         --episode-manifest analysis/eval_manifest_seed99_50.json \
+         --episode-manifest analysis/manifests/eval_manifest_seed99_50.json \
          --n-episodes 50 \
          --seed 99 \
          --run-name mixed_replay_nominal
 
        python scripts/04_eval_custom_scene.py \
          --policy-type smolvla \
-         --checkpoint output/train/smolvla_kitchen_mixed_replay/final \
-         --dataset-id local/franka-kitchen-wrist-mixed-replay \
+         --checkpoint output/train/smolvla_kitchen_mixed_replay_v4/final \
+         --dataset-id local/franka-kitchen-wrist-mixed-replay-v4 \
          --task="Pick up the cube." \
          --scene rustic_kitchen \
          --anchor floor_origin \
          --camera-layout up_wrist \
          --domain-randomization \
-         --episode-manifest analysis/eval_manifest_seed99_50.json \
+         --episode-manifest analysis/manifests/eval_manifest_seed99_50.json \
          --n-episodes 50 \
          --seed 99 \
          --run-name mixed_replay_perturbed
@@ -403,16 +431,18 @@ parameter through `--cube-friction`.
 - Evaluation comparison: `analysis/eval_comparison.md`
 - Aggregate evaluation summary with Wilson intervals: `analysis/eval_summary.json`
 - Failure plot: `analysis/failure_coordinate_scatter.svg`
-- Robustness matrix configuration: `output/eval/robustness_matrix/robustness_runs.json`
-- Robustness table: `output/eval/robustness_matrix/robustness_summary.md`
-- Robustness envelope plot: `output/eval/robustness_matrix/robustness_envelope.svg`
+- Robustness matrix configuration: `analysis/robustness/robustness_runs.json`
+- Robustness table: `analysis/robustness/robustness_summary.md`
+- Robustness envelope plot: `analysis/robustness/robustness_envelope.svg`
+- Extended paired comparison: `analysis/extended_eval_comparison.md`
 - Smoke-test output: `output/eval/smoke_test/eval_summary.json`
 
 ## Demo Video / 演示视频
 
 - Public video URL: TBD after YouTube or Bilibili upload.
 - Local preview: demo/radeon_kitchen_smolvla_demo_preview.mp4 if copied from the workspace root.
-- Final local render: videos/radeon_kitchen_smolvla_final_demo.mp4 (100 seconds, 1080p).
+- Final local render: videos/radeon_kitchen_smolvla_final_demo_robustness.mp4 (116 seconds, 1080p).
+- Previous fallback render: videos/radeon_kitchen_smolvla_final_demo.mp4 (100 seconds, 1080p).
 - Script: videos/demo_script.md
 - Submission target: public 1080p+ video, no longer than 3 minutes.
 - Required structure: problem, demo, method, metrics, limitations, next steps.
@@ -421,12 +451,12 @@ parameter through `--cube-friction`.
 
 ## Limitations and Next Improvements / 局限与下一步
 
-- The current best model is not robust across seeds yet.
-- Evaluation should be expanded to 50+ episodes and multiple seeds.
-- Targeted data should be mixed with replay data to avoid distribution shift; the repository now contains the pipeline, but a candidate only replaces the baseline if paired closed-loop results improve on both seeds.
+- The current best model is not robust across seeds yet: 42% on the paired 50-episode seed-99 manifest versus 5% on the earlier 20-episode seed-123 control.
+- The 2:1 mixed replay candidate was measured and rejected: 20% on the paired 50-episode set and 25% on a 20-episode seed-123 subset.
+- Camera dropout and occlusion each reduced the robustness-matrix baseline to 20%, showing that missing visual evidence is the highest-priority next training target.
 - The robustness matrix measures several synthetic gaps; it does not claim that a real robot will match simulation.
 - Domain randomization can be extended to textures, cube color and size, background clutter, camera intrinsics, and calibrated real-image statistics.
-- The uncertainty probe is an evaluation-time diagnostic. It must not silently replace the baseline submission checkpoint.
+- The uncertainty probe is an evaluation-time diagnostic; at threshold `0.03` it triggered zero warnings in 10 episodes, so it is not presented as a demonstrated improvement.
 - A real-robot transfer plan should account for camera calibration, latency, contact friction, and actuator limits.
 
 ## License

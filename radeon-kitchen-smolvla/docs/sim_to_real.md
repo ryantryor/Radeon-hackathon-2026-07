@@ -69,6 +69,24 @@ The resulting curve is evidence about simulation sensitivity, not a real-world
 success guarantee. Confidence intervals are Wilson intervals because success
 is a binomial episode-level outcome.
 
+Completed paired matrix (20 episodes per condition):
+
+| Condition | Success | Retention |
+|---|---:|---:|
+| Nominal | 10/20 = 50% | 100% |
+| Brightness `[0.85, 1.15]` | 11/20 = 55% | 110% |
+| RGB noise, std 4 | 9/20 = 45% | 90% |
+| Camera dropout, 50% observations | 4/20 = 20% | 40% |
+| Local occlusion, 25% area | 4/20 = 20% | 40% |
+| Action delay, 2 steps | 8/20 = 40% | 80% |
+| Low friction, 1.2 | 8/20 = 40% | 80% |
+| High friction, 1.8 | 11/20 = 55% | 110% |
+
+The 110% rows are sampling noise, not evidence that perturbations improve the
+policy. The stronger engineering conclusion is that missing visual evidence
+caused the largest measured degradation, followed by timing and low-friction
+stress.
+
 ## Lightweight uncertainty probe
 
 With `--uncertainty-samples 3`, the evaluator runs the same observation through
@@ -77,6 +95,11 @@ predicted joint action. Above `--uncertainty-threshold`, it can shorten the
 action horizon and reduce the action delta. This is a diagnostic and recovery
 heuristic, not a calibrated probability of failure; the baseline result is
 always reported separately.
+
+In the recorded 10-episode probe, the policy succeeded in 3/10 episodes. The
+threshold `0.03` triggered zero uncertain observations and zero replans; mean
+action disagreement was `0.00313`. This is a completed diagnostic with a null
+trigger result, so it is not presented as a measured robustness improvement.
 
 ## Calibration Plan
 
