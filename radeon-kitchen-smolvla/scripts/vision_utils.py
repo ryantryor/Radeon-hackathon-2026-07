@@ -56,3 +56,52 @@ def ablate_camera(
         return image
     value = np.uint8(np.clip(round(fill_value), 0, 255))
     return np.full_like(image, value)
+
+
+def apply_random_camera_dropout(
+    image: np.ndarray,
+    camera: str,
+    rng: np.random.Generator,
+    probability: float = 0.0,
+    fill_value: float = 127.5,
+) -> tuple[np.ndarray, bool]:
+    """Randomly replace one camera with neutral pixels.
+
+    This is deliberately frame-local: a real sensor can be briefly occluded or
+    unavailable while the rest of the observation remains usable.  Returning
+    the applied flag lets evaluation report how often a dropout occurred.
+    """
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError("camera dropout probability must be in [0, 1]")
+    dropped = bool(rng.random() < probability)
+    if not dropped:
+        return image, False
+    value = np.uint8(np.clip(round(fill_value), 0, 255))
+    return np.full_like(image, value), True
+
+
+def apply_occlusion(
+    image: np.ndarray,
+    rng: np.random.Generator,
+    probability: float = 0.0,
+    fraction: float = 0.25,
+    fill_value: float = 0.0,
+) -> tuple[np.ndarray, bool]:
+    """Apply a deterministic-per-seed rectangular image occlusion."""
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError("occlusion probability must be in [0, 1]")
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError("occlusion fraction must be in (0, 1]")
+    if rng.random() >= probability:
+        return image, False
+
+    height, width = image.shape[:2]
+    occ_h = max(1, int(round(height * fraction)))
+    occ_w = max(1, int(round(width * fraction)))
+    top = int(rng.integers(0, max(height - occ_h + 1, 1)))
+    left = int(rng.integers(0, max(width - occ_w + 1, 1)))
+    out = image.copy()
+    out[top:top + occ_h, left:left + occ_w] = np.uint8(
+        np.clip(round(fill_value), 0, 255)
+    )
+    return out, True

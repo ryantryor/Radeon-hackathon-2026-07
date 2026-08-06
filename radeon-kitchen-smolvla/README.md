@@ -7,7 +7,9 @@ Repository: https://github.com/ryantryor/Radeon-hackathon-2026-07/tree/main/rade
 
 ## Project Summary / 项目简介
 
-This project fine-tunes a vision-language-action policy for a Franka Panda robot to pick up a cube in a randomized rustic-kitchen Genesis simulation. The workflow is expert synthetic data generation, LeRobot dataset packaging, SmolVLA fine-tuning, then closed-loop Genesis evaluation on AMD Radeon ROCm cloud hardware.
+This project builds a failure-aware vision-language-action policy for a Franka Panda robot to pick up a cube in a randomized rustic-kitchen Genesis simulation. The workflow is expert synthetic data generation, LeRobot dataset packaging, SmolVLA fine-tuning, failure-coordinate analysis, targeted-plus-replay data generation, and paired closed-loop robustness evaluation on AMD Radeon ROCm cloud hardware.
+
+The central research question is not only whether the policy can pick up a cube, but where and why it fails when camera observations, timing, lighting, and contact parameters move away from the training distribution.
 
 本项目在 AMD Radeon ROCm 云服务器上，用 Genesis 生成机器人专家抓取轨迹，再用 LeRobot 数据格式微调 SmolVLA，让 Franka 机械臂根据顶视相机、手腕相机、当前关节状态和语言指令完成方块抓取。最终指标不是训练 loss，而是闭环仿真中真实抓起并保持方块的成功率。
 
@@ -22,6 +24,7 @@ Current best submission checkpoint / 当前提交模型:
 - Prompt: Pick up the cube.
 - Best controlled result: 11/20 = 55% on seed 99
 - Robustness note: the same checkpoint scored 1/20 = 5% on seed 123, so the result is promising but not yet robust across random placements.
+- Research framing: **Failure-Aware SmolVLA for cluttered kitchen manipulation**.
 
 ## Key Results / 核心指标
 
@@ -135,7 +138,10 @@ Our project-specific contributions / 本项目原创工作:
 - Patched SmolVLA training/evaluation for local offline backbone loading.
 - Ran controlled evaluations for prompt wording, training steps, second seed, and targeted-only fine-tuning.
 - Added scripts/05_analyze_eval.py to produce reproducible evaluation tables and failure coordinate plots.
-- Documented the failure analysis and proposed targeted + replay mixed data strategy.
+- Added failure-aware targeted placement generation and a 2:1 broad-replay mix builder.
+- Added training-time camera dropout and evaluation-time sensor dropout, occlusion, action-delay, friction, and visual-consistency uncertainty probes.
+- Added a paired robustness-matrix runner and an automatic Sim-to-Real envelope summary (CSV, Markdown, SVG).
+- Added PowerShell setup, smoke-test, and evaluation entry points for a stranger-friendly 30-minute path.
 
 ## Team / 团队分工
 
@@ -146,6 +152,21 @@ Our project-specific contributions / 本项目原创工作:
 ## Installation and Running / 安装与运行
 
 These commands assume the official AMD cloud image or an equivalent ROCm environment.
+
+### Quick reproducibility path
+
+From the project folder, activate the ROCm environment and run:
+
+    .\scripts\setup.ps1
+    .\scripts\smoke_test.ps1
+    .\scripts\run_eval.ps1 -Seed 99
+
+`setup.ps1` checks Python, ROCm PyTorch, Genesis, LeRobot, Transformers, and
+FFmpeg. `smoke_test.ps1` validates the dataset, loads the checkpoint, runs one
+short closed-loop inference episode, and checks that an evaluation JSON was
+written. The smoke test is an integration check, not a success-rate claim.
+
+On Linux/ROCm, the equivalent Python commands below can be used directly.
 
 1. Prepare environment:
 
@@ -197,6 +218,42 @@ These commands assume the official AMD cloud image or an equivalent ROCm environ
       --eval analysis/raw_eval/baseline_4000_prompt_red_seed99.json analysis/raw_eval/baseline_4000_prompt_cube_seed99.json analysis/raw_eval/baseline_8000_prompt_cube_seed99.json analysis/raw_eval/baseline_4000_prompt_cube_seed123.json analysis/raw_eval/targeted_4000_prompt_cube_seed99.json \
       --label baseline_4000_prompt_red_seed99 baseline_4000_prompt_cube_seed99 baseline_8000_prompt_cube_seed99 baseline_4000_prompt_cube_seed123 targeted_4000_prompt_cube_seed99 \
       --out-dir analysis
+
+### Advanced reproducibility commands
+
+1. Run the Sim-to-Real robustness envelope on a paired placement manifest:
+
+       python scripts/09_run_robustness_matrix.py \
+         --checkpoint output/train/smolvla_kitchen_wrist/final \
+         --dataset-id local/franka-kitchen-wrist-100ep \
+         --episode-manifest analysis/eval_manifest_seed99_50.json \
+         --n-episodes 50 \
+         --seed 99 \
+         --output-dir output
+
+       python scripts/10_summarize_robustness.py \
+         --input output/eval/robustness_matrix/robustness_runs.json
+
+The matrix reuses the same manifest for nominal lighting, brightness changes,
+RGB noise, random camera dropout, local occlusion, action delay, and low/high
+cube friction. The summary reports the 95% Wilson interval and
+`robustness_retention = stressed_success / nominal_success`.
+
+2. Train with camera dropout augmentation when generating a new dataset:
+
+       python scripts/02_gen_data_custom_scene.py \
+         --scene rustic_kitchen \
+         --anchor floor_origin \
+         --camera-layout up_wrist \
+         --n-episodes 100 \
+         --seed 42 \
+         --domain-randomization \
+         --camera-dropout-prob 0.15 \
+         --repo-id local/franka-kitchen-wrist-dr-dropout-100ep
+
+The dropout is per frame and masks at most one camera with neutral pixels. The
+feature schema does not change, so the same SmolVLA model can be evaluated in
+both full-view and degraded-view conditions.
 
 ## Reproducible Extension Experiments
 
@@ -346,6 +403,10 @@ parameter through `--cube-friction`.
 - Evaluation comparison: `analysis/eval_comparison.md`
 - Aggregate evaluation summary with Wilson intervals: `analysis/eval_summary.json`
 - Failure plot: `analysis/failure_coordinate_scatter.svg`
+- Robustness matrix configuration: `output/eval/robustness_matrix/robustness_runs.json`
+- Robustness table: `output/eval/robustness_matrix/robustness_summary.md`
+- Robustness envelope plot: `output/eval/robustness_matrix/robustness_envelope.svg`
+- Smoke-test output: `output/eval/smoke_test/eval_summary.json`
 
 ## Demo Video / 演示视频
 
@@ -362,8 +423,10 @@ parameter through `--cube-friction`.
 
 - The current best model is not robust across seeds yet.
 - Evaluation should be expanded to 50+ episodes and multiple seeds.
-- Targeted data should be mixed with replay data to avoid distribution shift.
-- Domain randomization should cover lighting, textures, cube color and size, camera noise, friction, occlusion, and background clutter.
+- Targeted data should be mixed with replay data to avoid distribution shift; the repository now contains the pipeline, but a candidate only replaces the baseline if paired closed-loop results improve on both seeds.
+- The robustness matrix measures several synthetic gaps; it does not claim that a real robot will match simulation.
+- Domain randomization can be extended to textures, cube color and size, background clutter, camera intrinsics, and calibrated real-image statistics.
+- The uncertainty probe is an evaluation-time diagnostic. It must not silently replace the baseline submission checkpoint.
 - A real-robot transfer plan should account for camera calibration, latency, contact friction, and actuator limits.
 
 ## License

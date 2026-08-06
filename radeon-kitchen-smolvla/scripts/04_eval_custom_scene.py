@@ -29,7 +29,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from vision_utils import ablate_camera, augment_image, resolve_domain_randomization
+from vision_utils import (
+    ablate_camera,
+    apply_occlusion,
+    apply_random_camera_dropout,
+    augment_image,
+    resolve_domain_randomization,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +132,16 @@ def main():
                     choices=["both", "overhead_only", "wrist_only"],
                     help="Mask one visual input while keeping the policy schema unchanged")
     ap.add_argument("--camera-ablation-fill", type=float, default=127.5)
+    ap.add_argument("--camera-dropout-prob", type=float, default=0.0,
+                    help="Per-observation probability of masking one camera")
+    ap.add_argument("--camera-dropout-fill", type=float, default=127.5,
+                    help="Neutral pixel value used for random camera dropout")
+    ap.add_argument("--occlusion-prob", type=float, default=0.0,
+                    help="Per-observation probability of a rectangular camera occlusion")
+    ap.add_argument("--occlusion-fraction", type=float, default=0.25,
+                    help="Occlusion side length as a fraction of image dimensions")
+    ap.add_argument("--occlusion-fill", type=float, default=0.0,
+                    help="Pixel value used for synthetic occlusion")
 
     # Eval args
     ap.add_argument("--n-episodes", type=int, default=10)
@@ -135,6 +151,18 @@ def main():
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--settle-steps", type=int, default=30)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--action-delay-steps", type=int, default=0,
+                    help="Delay physical action execution by this many control steps")
+    ap.add_argument("--uncertainty-samples", type=int, default=0,
+                    help="Extra visual perturbation passes for action disagreement")
+    ap.add_argument("--uncertainty-noise-std", type=float, default=2.0,
+                    help="RGB noise used for uncertainty passes")
+    ap.add_argument("--uncertainty-threshold", type=float, default=0.03,
+                    help="Mean first-action joint std that marks an observation uncertain")
+    ap.add_argument("--uncertainty-slowdown", type=float, default=0.5,
+                    help="Max-delta multiplier while uncertainty is high")
+    ap.add_argument("--uncertainty-replan", action="store_true",
+                    help="Use one action step instead of a full chunk when uncertain")
 
     # Success criteria
     ap.add_argument("--success-lift-m", type=float, default=0.02)
@@ -176,6 +204,22 @@ def main():
         args.image_noise_std,
         tuple(args.brightness_range) if args.brightness_range else None,
     )
+    if not 0.0 <= args.camera_dropout_prob <= 1.0:
+        ap.error("--camera-dropout-prob must be in [0, 1]")
+    if not 0.0 <= args.occlusion_prob <= 1.0:
+        ap.error("--occlusion-prob must be in [0, 1]")
+    if not 0.0 < args.occlusion_fraction <= 1.0:
+        ap.error("--occlusion-fraction must be in (0, 1]")
+    if args.action_delay_steps < 0:
+        ap.error("--action-delay-steps must be >= 0")
+    if args.uncertainty_samples < 0:
+        ap.error("--uncertainty-samples must be >= 0")
+    if args.uncertainty_noise_std < 0.0:
+        ap.error("--uncertainty-noise-std must be >= 0")
+    if args.uncertainty_threshold < 0.0:
+        ap.error("--uncertainty-threshold must be >= 0")
+    if not 0.0 < args.uncertainty_slowdown <= 1.0:
+        ap.error("--uncertainty-slowdown must be in (0, 1]")
 
     n_dofs = len(JOINT_NAMES)
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
@@ -493,7 +537,12 @@ def main():
         if policy_type == "bc":
             prev_states.clear()
         action_queue = []
+        delayed_actions = []
         replan_count = 0
+        uncertain_observations = 0
+        uncertainty_scores = []
+        camera_dropout_observations = 0
+        occluded_observations = 0
         image_rng = np.random.default_rng(args.seed + 100_000 + ep_idx)
         brightness = (
             float(image_rng.uniform(*args.brightness_range))
@@ -511,30 +560,92 @@ def main():
 
             if len(action_queue) == 0:
                 images = None
+                uncertain_now = False
                 if _needs_images:
-                    frame_up = ablate_camera(
-                        augment_image(render_cam(cam_up), image_rng,
-                                      args.image_noise_std, brightness),
-                        "overhead", args.camera_ablation,
-                        args.camera_ablation_fill,
-                    )
-                    frame_side = ablate_camera(
-                        augment_image(render_cam(cam_side), image_rng,
-                                      args.image_noise_std, brightness),
-                        "wrist" if args.camera_layout == "up_wrist" else "side",
-                        args.camera_ablation, args.camera_ablation_fill,
-                    )
-                    images = {
-                        "observation.images.up": frame_up,
-                        "observation.images.side": frame_side,
-                    }
-                chunk = predict(state) if not _needs_images else predict(state, images)
-                n_use = min(args.action_horizon, len(chunk))
+                    raw_up = render_cam(cam_up)
+                    raw_side = render_cam(cam_side)
+                    side_camera_name = "wrist" if args.camera_layout == "up_wrist" else "side"
+                    drop_camera = None
+                    if image_rng.random() < args.camera_dropout_prob:
+                        drop_camera = "overhead" if image_rng.random() < 0.5 else side_camera_name
+                        camera_dropout_observations += 1
+
+                    def build_images(local_noise, local_brightness):
+                        local_up = augment_image(
+                            raw_up, image_rng, local_noise, local_brightness)
+                        local_side = augment_image(
+                            raw_side, image_rng, local_noise, local_brightness)
+                        local_up, occ_up = apply_occlusion(
+                            local_up, image_rng, args.occlusion_prob,
+                            args.occlusion_fraction, args.occlusion_fill)
+                        local_side, occ_side = apply_occlusion(
+                            local_side, image_rng, args.occlusion_prob,
+                            args.occlusion_fraction, args.occlusion_fill)
+                        local_up = ablate_camera(
+                            local_up, "overhead", args.camera_ablation,
+                            args.camera_ablation_fill)
+                        local_side = ablate_camera(
+                            local_side, side_camera_name, args.camera_ablation,
+                            args.camera_ablation_fill)
+                        if drop_camera == "overhead":
+                            local_up = np.full_like(local_up, np.uint8(
+                                np.clip(round(args.camera_dropout_fill), 0, 255)))
+                        elif drop_camera == side_camera_name:
+                            local_side = np.full_like(local_side, np.uint8(
+                                np.clip(round(args.camera_dropout_fill), 0, 255)))
+                        return {
+                            "observation.images.up": local_up,
+                            "observation.images.side": local_side,
+                        }, bool(occ_up or occ_side)
+
+                    images, had_occlusion = build_images(
+                        args.image_noise_std, brightness)
+                    occluded_observations += int(had_occlusion)
+
+                    n_passes = max(1, args.uncertainty_samples)
+                    sampled_chunks = []
+                    for sample_idx in range(n_passes):
+                        if sample_idx == 0:
+                            sample_images = images
+                        else:
+                            sample_images, _ = build_images(
+                                args.uncertainty_noise_std,
+                                brightness * float(image_rng.uniform(0.98, 1.02)),
+                            )
+                        sampled_chunks.append(predict(state, sample_images))
+                    chunk = sampled_chunks[0]
+                    if len(sampled_chunks) > 1:
+                        first_actions = np.stack([
+                            item[0, :n_dofs] if item.ndim == 2 else item[:n_dofs]
+                            for item in sampled_chunks
+                        ])
+                        uncertainty_score = float(np.mean(np.std(first_actions, axis=0)))
+                        uncertainty_scores.append(uncertainty_score)
+                        uncertain_now = uncertainty_score >= args.uncertainty_threshold
+                        if uncertain_now:
+                            uncertain_observations += 1
+                    else:
+                        uncertainty_score = 0.0
+                else:
+                    chunk = predict(state)
+                    uncertainty_score = 0.0
+                uncertain_action = uncertain_now
+                n_use = 1 if uncertain_now and args.uncertainty_replan else min(args.action_horizon, len(chunk))
                 action_queue = [chunk[i, :n_dofs] for i in range(n_use)]
                 replan_count += 1
 
             target_raw = action_queue.pop(0)
-            target = smooth_action(current, target_raw, args.max_delta_rad)
+            if args.action_delay_steps > 0:
+                delayed_actions.append(target_raw)
+                if len(delayed_actions) > args.action_delay_steps:
+                    target_command = delayed_actions.pop(0)
+                else:
+                    target_command = current.copy()
+            else:
+                target_command = target_raw
+            delta_limit = args.max_delta_rad * (
+                args.uncertainty_slowdown if uncertain_action else 1.0)
+            target = smooth_action(current, target_command, delta_limit)
             current = target.copy()
 
             franka.control_dofs_position(target, motors_dof)
@@ -582,6 +693,14 @@ def main():
             "end_lift_m": float(cz_end - base_z_cube),
             "sustain_frames": sustain_max,
             "replan_count": replan_count,
+            "uncertain_observations": int(uncertain_observations),
+            "uncertainty_rate": float(
+                uncertain_observations / max(replan_count, 1)),
+            "mean_action_uncertainty": float(
+                np.mean(uncertainty_scores) if uncertainty_scores else 0.0),
+            "camera_dropout_observations": int(camera_dropout_observations),
+            "occluded_observations": int(occluded_observations),
+            "action_delay_steps": int(args.action_delay_steps),
         }
         all_results.append(result)
         status = "SUCCESS" if success else "FAIL"
@@ -619,6 +738,23 @@ def main():
         "camera_layout": args.camera_layout,
         "camera_ablation": args.camera_ablation,
         "camera_ablation_fill": float(args.camera_ablation_fill),
+        "camera_dropout": {
+            "probability": float(args.camera_dropout_prob),
+            "fill_value": float(args.camera_dropout_fill),
+        },
+        "occlusion": {
+            "probability": float(args.occlusion_prob),
+            "fraction": float(args.occlusion_fraction),
+            "fill_value": float(args.occlusion_fill),
+        },
+        "action_delay_steps": int(args.action_delay_steps),
+        "uncertainty": {
+            "samples": int(args.uncertainty_samples),
+            "noise_std": float(args.uncertainty_noise_std),
+            "threshold": float(args.uncertainty_threshold),
+            "slowdown": float(args.uncertainty_slowdown),
+            "replan": bool(args.uncertainty_replan),
+        },
         "cube_friction": float(args.cube_friction),
         "domain_randomization": {
             "image_noise_std": float(args.image_noise_std),

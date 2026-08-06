@@ -19,6 +19,15 @@ during data generation and evaluation. This is intentionally a small,
 controlled augmentation rather than a claim that the full visual gap has been
 solved.
 
+The repository now also exposes two controlled sensor-loss tests:
+
+- `--camera-dropout-prob` masks one of the two views with neutral pixels;
+- `--occlusion-prob` and `--occlusion-fraction` apply a localized rectangular
+  occlusion to the rendered observation.
+
+These tests keep the policy architecture and episode placements fixed. They
+measure the cost of missing visual evidence instead of changing the task.
+
 ## Contact and Dynamics Gap
 
 - Real friction, restitution, contact compliance, and gripper pad deformation
@@ -29,8 +38,9 @@ solved.
   bandwidth affect the executed action.
 
 The evaluation already exposes cube friction as an independent parameter. A
-future calibrated sweep should report success over a friction interval instead
-of using one nominal value.
+calibrated sweep should report success over a friction interval instead of
+using one nominal value. The robustness matrix includes low and high friction
+conditions as explicit controls.
 
 ## Control and Timing Gap
 
@@ -41,8 +51,32 @@ of using one nominal value.
 
 Before a hardware trial, the action rate, chunk horizon, smoothing limit,
 joint limits, and emergency stop behavior should be matched to the real
-controller. The first transfer test should use a low-height, low-speed
-workspace and a soft object or guarded fixture.
+controller. `--action-delay-steps` provides a discrete timing stress test for
+this gap. The first transfer test should use a low-height, low-speed workspace
+and a soft object or guarded fixture.
+
+## Robustness envelope protocol
+
+The matrix runner executes every condition against one fixed placement
+manifest. The nominal score is the paired control. For each stressed condition
+we report:
+
+```text
+robustness_retention = stressed closed-loop success / nominal closed-loop success
+```
+
+The resulting curve is evidence about simulation sensitivity, not a real-world
+success guarantee. Confidence intervals are Wilson intervals because success
+is a binomial episode-level outcome.
+
+## Lightweight uncertainty probe
+
+With `--uncertainty-samples 3`, the evaluator runs the same observation through
+small visual perturbations and measures the standard deviation of the first
+predicted joint action. Above `--uncertainty-threshold`, it can shorten the
+action horizon and reduce the action delta. This is a diagnostic and recovery
+heuristic, not a calibrated probability of failure; the baseline result is
+always reported separately.
 
 ## Calibration Plan
 

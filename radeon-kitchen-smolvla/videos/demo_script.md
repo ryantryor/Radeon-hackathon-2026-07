@@ -59,39 +59,41 @@ Narration:
 > scored 5 percent. The same baseline also scored 5 percent on seed 123, so
 > robustness remains an open problem.
 
-## 1:55-2:20 - New Experiments
+## 1:55-2:25 - Failure-aware robustness experiments
 
-Show the fixed manifest, the three camera-ablation labels, and the mixed
-replay command.
-
-Narration:
-
-> The next experiments are designed to isolate causes instead of hiding
-> variance. We use one fixed 50-episode manifest for overhead-only,
-> wrist-only, and two-camera ablations. We generate targeted placements from
-> observed failure coordinates, mix them with broad replay data, and evaluate
-> nominal and visually perturbed observations separately.
-
-## 2:20-2:40 - Sim-to-Real Limits
-
-Show `docs/sim_to_real.md`.
+Show the fixed manifest, the three camera-ablation labels, the mixed replay
+command, and the robustness envelope output.
 
 Narration:
 
-> These are simulation results. Real transfer will require camera calibration,
-> friction and contact identification, controller latency matching, and
-> guarded low-speed tests. The project documents these risks rather than
-> claiming that simulation success directly equals hardware success.
+> The next experiments isolate causes instead of hiding variance. We generate
+> targeted placements from observed failure coordinates, mix them with broad
+> replay data at two to one, and evaluate the same placement manifest under
+> full-view, overhead-only, wrist-only, camera dropout, occlusion, timing
+> delay, and friction changes.
 
-## 2:40-2:50 - Closing
+## 2:25-2:42 - Sim-to-Real envelope
+
+Show `robustness_envelope.svg`, then `docs/sim_to_real.md`.
+
+Narration:
+
+> The envelope reports stressed success divided by nominal success. It makes
+> the transfer boundary visible: visual stress tests probe missing evidence,
+> delay probes timing, and friction probes contact dynamics. These are still
+> simulation results. Real transfer requires camera calibration, contact
+> identification, controller latency matching, and guarded low-speed tests.
+
+## 2:42-2:55 - Closing
 
 Show the repository URL, team name, and artifact paths.
 
 Narration:
 
 > The deliverable is a reproducible AMD ROCm workflow from synthetic expert
-> data to closed-loop VLA evaluation, with negative controls, failure
-> analysis, and a concrete path toward stronger robustness.
+> data to closed-loop VLA evaluation, with negative controls, failure-aware
+> data replay, a measured robustness envelope, and a concrete path toward
+> real-robot calibration.
 
 Final frame:
 
@@ -108,4 +110,6 @@ Final frame:
 - Show the failure coordinate plot.
 - Show the fixed-manifest and mixed-replay commands.
 - Keep the final video at or below 3 minutes.
+- Show nominal and stressed success as separate numbers; never label a planned
+  experiment as a completed result.
 - Add Chinese subtitles during editing if a bilingual cut is required.

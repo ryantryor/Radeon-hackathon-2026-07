@@ -8,8 +8,10 @@ simulation. The policy receives two RGB views, robot joint state, and the
 language instruction `Pick up the cube.` It predicts joint-position actions in
 a closed loop.
 
-The intended application is a compact benchmark for training and diagnosing
-vision-language-action policies before a future real-robot deployment.
+The intended application is a compact **failure-aware benchmark for cluttered
+kitchen manipulation**. It diagnoses where a vision-language-action policy
+breaks before a future real-robot deployment, then supplies targeted hard cases
+without discarding broad replay data.
 
 ## 2. System Architecture
 
@@ -94,22 +96,41 @@ the current policy is not yet robust.
 - Closed-loop evaluation with fixed scene, anchor, camera layout, and seed.
 - Prompt, training-step, seed, and targeted-data controls.
 - Failure-coordinate analysis and a mixed replay data pipeline.
-- Camera ablation, fixed episode manifests, visual perturbations, and dataset
-  protocol validation as reproducible next experiments.
+- Camera ablation, random camera dropout, localized occlusion, action-delay and
+  friction stress tests, plus fixed episode manifests for paired comparisons.
+- A visual-consistency uncertainty probe that can slow down and replan when
+  perturbed action predictions disagree.
+- A robustness-matrix runner that emits a success/retention table and SVG
+  envelope without requiring plotting packages.
 
-## 8. Limitations and Next Experiments
+## 8. Sim-to-Real Evaluation Protocol
+
+The project separates nominal performance from transfer stress tests. Every
+condition uses the same placement manifest, and the nominal result is the
+denominator for robustness retention:
+
+```text
+retention = stressed success rate / nominal success rate
+```
+
+The stressors are deliberately interpretable: brightness and RGB noise probe
+the visual sensor gap; camera dropout and local occlusion probe missing visual
+evidence; action delay probes timing; friction sweeps probe contact dynamics.
+The results are stored under `output/eval/robustness_matrix/` and summarized by
+`scripts/10_summarize_robustness.py` with Wilson intervals.
+
+## 9. Limitations and Next Experiments
 
 The next high-value experiments are:
 
-1. Compare `both`, `overhead_only`, and `wrist_only` camera feeds using the
-   same 50-episode manifest.
-2. Generate targeted hard-case data and mix it with the original 100 episodes
-   at a documented replay ratio.
-3. Evaluate every checkpoint on the identical manifest across at least three
-   seeds or 50 episodes.
-4. Add brightness and sensor-noise perturbations during training, then test
-   nominal and perturbed evaluation separately.
-5. Report the sim-to-real risks and calibration plan before any hardware test.
+1. Run the paired 50-episode camera ablation and robustness matrix on the ROCm
+   cloud runtime.
+2. Generate targeted hard-case data, mix it with the original 100 episodes at
+   2:1 replay-to-targeted ratio, and evaluate the candidate on both seeds.
+3. Compare camera-dropout training against nominal training under the same
+   manifest.
+4. Calibrate the synthetic stressor ranges from real camera and controller
+   measurements before any hardware claim.
 
 These experiments are designed to improve evidence quality and technical depth
 without hiding the negative controls.

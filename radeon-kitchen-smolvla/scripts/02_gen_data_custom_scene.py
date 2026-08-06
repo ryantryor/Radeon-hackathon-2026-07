@@ -64,6 +64,10 @@ def main():
     ap.add_argument("--brightness-range", type=float, nargs=2, default=None,
                     metavar=("MIN", "MAX"),
                     help="Per-episode image brightness multiplier range")
+    ap.add_argument("--camera-dropout-prob", type=float, default=0.0,
+                    help="Per-frame probability of masking one camera during training")
+    ap.add_argument("--camera-dropout-fill", type=float, default=127.5,
+                    help="Neutral pixel value used for training-time camera dropout")
     ap.add_argument("--cube-dx-range", type=float, nargs=2, default=None,
                     metavar=("MIN", "MAX"),
                     help="Override the randomized cube forward-offset range")
@@ -116,6 +120,8 @@ def main():
         args.image_noise_std,
         tuple(args.brightness_range) if args.brightness_range else None,
     )
+    if not 0.0 <= args.camera_dropout_prob <= 1.0:
+        ap.error("--camera-dropout-prob must be in [0, 1]")
 
     MOTOR_NAMES = [f"{j}.pos" for j in JOINT_NAMES]
     FINGER_OPEN = 0.04
@@ -371,6 +377,14 @@ def main():
                                    args.image_noise_std, brightness)
             img_side = augment_image(render_cam(cam_side), image_rng,
                                      args.image_noise_std, brightness)
+            drop_camera = None
+            if image_rng.random() < args.camera_dropout_prob:
+                drop_camera = "overhead" if image_rng.random() < 0.5 else "wrist"
+            fill_value = np.uint8(np.clip(round(args.camera_dropout_fill), 0, 255))
+            if drop_camera == "overhead":
+                img_up = np.full_like(img_up, fill_value)
+            elif drop_camera == "wrist":
+                img_side = np.full_like(img_side, fill_value)
 
             if step_idx in smoke_frames:
                 _save_png(smoke_dir / f"ep0_f{step_idx:03d}_up.png", img_up)
@@ -467,6 +481,11 @@ def main():
         "domain_randomization": {
             "image_noise_std": float(args.image_noise_std),
             "brightness_range": list(args.brightness_range) if args.brightness_range else [1.0, 1.0],
+        },
+        "camera_dropout": {
+            "probability": float(args.camera_dropout_prob),
+            "fill_value": float(args.camera_dropout_fill),
+            "scope": "per_frame; at most one camera is masked",
         },
         "success_episode_ids": success_ids,
         "failure_episode_ids": failure_ids,
