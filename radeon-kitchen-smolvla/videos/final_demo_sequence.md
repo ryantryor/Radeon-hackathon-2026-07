@@ -21,5 +21,4 @@ fallback.
 | 1:52-2:04 | Sim-to-real limitations and calibration plan |
 | 2:04-2:12 | GitHub URL, project folder, team, and track |
 
-The public video URL remains `TBD` until the file is uploaded to YouTube or
-Bilibili.
+Public video URL: https://youtu.be/QzXG13tI8_o

@@ -26,7 +26,8 @@ completed in the contest portal or video platform.
 - [ ] Confirm the portal team name is `Chen Weiliang` and member name is
       `Chen Weiliang`
 - [ ] Paste the public GitHub project URL into the submission form
-- [ ] Paste the public video URL into the submission form
+- [ ] Paste the public video URL into the submission form:
+      `https://youtu.be/QzXG13tI8_o`
 - [ ] Submit before 2026-08-06 23:59 Beijing time, as stated in the contest notice
 - [ ] Keep the final submission form, PR title/body, and supporting text in English
       where the starter repository requires English; keep the README bilingual
@@ -38,7 +39,8 @@ completed in the contest portal or video platform.
 - [x] Show one success, one failure, the result table, and the failure plot
 - [x] Add bilingual subtitles or bilingual on-screen labels
 - [x] End on the GitHub URL, team name, and track
-- [ ] Upload publicly to YouTube or Bilibili
+- [x] Upload publicly to YouTube or Bilibili:
+      `https://youtu.be/QzXG13tI8_o`
 - [x] Keep the original exported video as a backup
 
 The current local render is
@@ -46,5 +48,5 @@ The current local render is
 1920x1080). Its stress comparison records the actual perturbed policy inputs,
 so the 40% occlusion is visible in both bottom-row camera panels.
 
-The repository currently uses `TBD` for the public video URL until the upload
-is completed. No fabricated URL should be submitted.
+The public video URL is `https://youtu.be/QzXG13tI8_o`. The remaining portal
+action is to paste this URL into the competition submission form.

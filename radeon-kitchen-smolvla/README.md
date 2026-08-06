@@ -481,7 +481,7 @@ parameter through `--cube-friction`.
 
 ## Demo Video / 演示视频
 
-- Public video URL: TBD after YouTube or Bilibili upload.
+- Public video URL: https://youtu.be/QzXG13tI8_o
 - Local preview: demo/radeon_kitchen_smolvla_demo_preview.mp4 if copied from the workspace root.
 - Final local render: videos/radeon_kitchen_smolvla_final_demo_robustness.mp4 (116 seconds, 1080p).
 - Intensity-sweep render: videos/radeon_kitchen_smolvla_final_demo_intensity_sweep.mp4 (132 seconds, 1080p).

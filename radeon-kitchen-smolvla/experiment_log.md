@@ -106,8 +106,8 @@ Completed on the ROCm cloud runtime:
 4. Ran the baseline robustness matrix and copied JSON, CSV, Markdown, and SVG
    evidence into the repository.
 
-Remaining submission action: upload the final local video and replace the
-public video URL placeholder after YouTube or Bilibili publication.
+The final local video has been uploaded publicly to YouTube:
+https://youtu.be/QzXG13tI8_o
 
 The original 4,000-step checkpoint remains the submission fallback until a
 new candidate beats it on a paired evaluation set without hiding the
