@@ -107,7 +107,7 @@ Completed on the ROCm cloud runtime:
    evidence into the repository.
 
 The final local video has been uploaded publicly to YouTube:
-https://youtu.be/QzXG13tI8_o
+https://youtu.be/N06ePLwqoqk
 
 The original 4,000-step checkpoint remains the submission fallback until a
 new candidate beats it on a paired evaluation set without hiding the

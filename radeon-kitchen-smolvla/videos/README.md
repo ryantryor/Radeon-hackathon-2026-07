@@ -1,6 +1,6 @@
 # Demo Video
 
-Public video URL: https://youtu.be/QzXG13tI8_o
+Public video URL: https://youtu.be/N06ePLwqoqk
 
 Final local render: `radeon_kitchen_smolvla_final_demo_intensity_sweep.mp4`
 (132 seconds, 1920x1080, English narration, bilingual on-screen text). The earlier

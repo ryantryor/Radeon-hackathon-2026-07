@@ -199,6 +199,7 @@ Our project-specific contributions / 本项目原创工作:
 
 - Team name: Chen Weiliang / 陈伟亮
 - Member: Chen Weiliang / 陈伟亮
+- Contest contact email: 1030114165@qq.com
 - Contribution: environment setup, data generation, model training, closed-loop evaluation, failure analysis, README, and demo-video planning.
 
 ## Installation and Running / 安装与运行
@@ -481,7 +482,7 @@ parameter through `--cube-friction`.
 
 ## Demo Video / 演示视频
 
-- Public video URL: https://youtu.be/QzXG13tI8_o
+- Public video URL: https://youtu.be/N06ePLwqoqk
 - Local preview: demo/radeon_kitchen_smolvla_demo_preview.mp4 if copied from the workspace root.
 - Final local render: videos/radeon_kitchen_smolvla_final_demo_robustness.mp4 (116 seconds, 1080p).
 - Intensity-sweep render: videos/radeon_kitchen_smolvla_final_demo_intensity_sweep.mp4 (132 seconds, 1080p).
