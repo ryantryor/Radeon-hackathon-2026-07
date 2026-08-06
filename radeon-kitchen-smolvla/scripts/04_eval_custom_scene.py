@@ -533,6 +533,7 @@ def main():
         base_z_cube = cz
         cube_z_hist = []
         _rec_frames_up, _rec_frames_side = [], []
+        _last_policy_images = None
         current = HOME_QPOS[:n_dofs].copy()
         if policy_type == "bc":
             prev_states.clear()
@@ -600,6 +601,9 @@ def main():
 
                     images, had_occlusion = build_images(
                         args.image_noise_std, brightness)
+                    # Record the exact perturbed observation seen by the
+                    # policy, rather than a clean post-action render.
+                    _last_policy_images = images
                     occluded_observations += int(had_occlusion)
 
                     n_passes = max(1, args.uncertainty_samples)
@@ -652,22 +656,28 @@ def main():
             scene.step()
 
             if args.record_video:
-                _rec_frames_up.append(
-                    ablate_camera(
-                        augment_image(render_cam(cam_up), image_rng,
-                                      args.image_noise_std, brightness),
-                        "overhead", args.camera_ablation,
-                        args.camera_ablation_fill,
+                if _last_policy_images is not None:
+                    _rec_frames_up.append(
+                        _last_policy_images["observation.images.up"].copy())
+                    _rec_frames_side.append(
+                        _last_policy_images["observation.images.side"].copy())
+                else:
+                    _rec_frames_up.append(
+                        ablate_camera(
+                            augment_image(render_cam(cam_up), image_rng,
+                                          args.image_noise_std, brightness),
+                            "overhead", args.camera_ablation,
+                            args.camera_ablation_fill,
+                        )
                     )
-                )
-                _rec_frames_side.append(
-                    ablate_camera(
-                        augment_image(render_cam(cam_side), image_rng,
-                                      args.image_noise_std, brightness),
-                        "wrist" if args.camera_layout == "up_wrist" else "side",
-                        args.camera_ablation, args.camera_ablation_fill,
+                    _rec_frames_side.append(
+                        ablate_camera(
+                            augment_image(render_cam(cam_side), image_rng,
+                                          args.image_noise_std, brightness),
+                            "wrist" if args.camera_layout == "up_wrist" else "side",
+                            args.camera_ablation, args.camera_ablation_fill,
+                        )
                     )
-                )
 
         # ---- evaluate ----
         lifted = [z >= base_z_cube + args.success_lift_m for z in cube_z_hist]

@@ -27,6 +27,9 @@ The repository now also exposes two controlled sensor-loss tests:
 
 These tests keep the policy architecture and episode placements fixed. They
 measure the cost of missing visual evidence instead of changing the task.
+For video evidence, the recorder stores the perturbed policy observations
+directly; this keeps the visible stress condition aligned with the input used
+for closed-loop inference.
 
 ## Contact and Dynamics Gap
 

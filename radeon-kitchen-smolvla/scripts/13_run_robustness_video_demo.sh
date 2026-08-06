@@ -12,6 +12,7 @@ fi
 CHECKPOINT="${CHECKPOINT:-output/train/smolvla_kitchen_wrist/final}"
 DATASET_ID="${DATASET_ID:-local/franka-kitchen-wrist-100ep}"
 MANIFEST="${MANIFEST:-analysis/manifests/eval_manifest_seed99_50.json}"
+N_EPISODES="${N_EPISODES:-3}"
 COMMON=(
   scripts/04_eval_custom_scene.py
   --policy-type smolvla
@@ -20,7 +21,7 @@ COMMON=(
   --task "Pick up the cube."
   --camera-layout up_wrist
   --episode-manifest "$MANIFEST"
-  --n-episodes 3
+  --n-episodes "$N_EPISODES"
   --max-steps 150
   --seed 99
   --record-video

@@ -33,13 +33,18 @@ completed in the contest portal or video platform.
 
 ## Video: user action required
 
-- [ ] Export at 1080p or higher and keep the duration at or below 3 minutes
-- [ ] Open with a successful pick within the first 5 seconds
-- [ ] Show one success, one failure, the result table, and the failure plot
-- [ ] Add bilingual subtitles or bilingual on-screen labels
-- [ ] End on the GitHub URL, team name, and track
+- [x] Export at 1080p or higher and keep the duration at or below 3 minutes
+- [x] Open with a successful pick within the first 5 seconds
+- [x] Show one success, one failure, the result table, and the failure plot
+- [x] Add bilingual subtitles or bilingual on-screen labels
+- [x] End on the GitHub URL, team name, and track
 - [ ] Upload publicly to YouTube or Bilibili
-- [ ] Keep the original exported video as a backup
+- [x] Keep the original exported video as a backup
+
+The current local render is
+`videos/radeon_kitchen_smolvla_final_demo_intensity_sweep.mp4` (132.08 seconds,
+1920x1080). Its stress comparison records the actual perturbed policy inputs,
+so the 40% occlusion is visible in both bottom-row camera panels.
 
 The repository currently uses `TBD` for the public video URL until the upload
 is completed. No fabricated URL should be submitted.

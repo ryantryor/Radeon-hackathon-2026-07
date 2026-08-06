@@ -20,3 +20,7 @@ Recommended evidence to include:
 - analysis/robustness/robustness_intensity_envelope.svg
 - The final render's nominal-versus-40%-occlusion four-panel clip
 - The experiment table from README.md or analysis/eval_comparison.md
+
+The stress comparison uses clips recorded from the exact perturbed observations
+fed to the policy. The bottom row therefore shows the localized rectangular
+occlusion itself, rather than a clean post-action render.
